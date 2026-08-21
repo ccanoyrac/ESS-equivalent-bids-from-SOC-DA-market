@@ -4,6 +4,7 @@ import math
 from dataclasses import dataclass
 
 import numpy as np
+import pandas as pd
 from scipy.optimize import linprog
 
 from core.system import System
@@ -28,6 +29,21 @@ class DispatchResult:
     @property
     def terminal_soc(self) -> float:
         return float(self.soc[-1])
+
+    def to_frame(self) -> pd.DataFrame:
+        """Interval-by-interval dispatch table, generators summed by type (paper Tables 2-4)."""
+        T = len(self.price)
+        return pd.DataFrame(
+            {
+                "Renewable (MW)": self.renewable.sum(axis=0).round(6),
+                "Thermal (MW)": self.thermal.sum(axis=0).round(6),
+                "ESS discharge (MW)": self.discharge.round(6),
+                "ESS charge (MW)": self.charge.round(6),
+                "SOC (MWh)": self.soc.round(6),
+                "Price ($/MWh)": self.price.round(6),
+            },
+            index=pd.RangeIndex(1, T + 1, name="Interval"),
+        )
 
 
 def _bound(value: float) -> float | None:

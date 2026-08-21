@@ -4,8 +4,6 @@ Baldick (2026), Section 4.7 (Tables 1-4). Run as `python -m experiments.reproduc
 
 from __future__ import annotations
 
-import pandas as pd
-
 from core.generator import RenewableGenerator, ThermalGenerator
 from core.storage import StorageParams
 from core.system import System
@@ -47,25 +45,11 @@ def run_case(name: str) -> DispatchResult:
     return solve_day_ahead(system, terminal_value)
 
 
-def as_table(result: DispatchResult) -> pd.DataFrame:
-    return pd.DataFrame(
-        {
-            "Renewable (MW)": result.renewable[0].round(3),
-            "Thermal (MW)": result.thermal[0].round(3),
-            "ESS discharge (MW)": result.discharge.round(3),
-            "ESS charge (MW)": result.charge.round(3),
-            "SOC (MWh)": result.soc.round(3),
-            "Price ($/MWh)": result.price.round(3),
-        },
-        index=pd.RangeIndex(1, len(result.price) + 1, name="Interval"),
-    )
-
-
 def main() -> None:
     for name in CASES:
         result = run_case(name)
         print(f"\n=== {name} ===")
-        print(as_table(result).to_string())
+        print(result.to_frame().round(3).to_string())
         print(f"objective (net cost, $): {result.objective:,.2f}")
         print(f"terminal value b(.) ($): {result.terminal_value:,.2f}")
         print(f"ESS surplus ($): {result.ess_surplus:,.2f}")

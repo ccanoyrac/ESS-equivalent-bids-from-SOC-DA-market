@@ -36,7 +36,7 @@ dropped, or found to overlap with new literature.
 |---|---:|---:|---|
 | **Learning/optimizing `b(.)`** | ★★★★★ | ★★★★★ | Best candidate. `b(delta) ≈ V_{T+1}(sbar_T+delta) - V_{T+1}(sbar_T)`; compare `b^perfect, b^forecast, b^learned, b^robust, b^wrong` against conventional bidding. |
 | DA-RT operation under uncertainty | ★★★★★ | ★★★★☆ | Paper only sketches RT (Appendix A.4); re-defines `sbar_T` as the DA SOC at/interpolated to the RT horizon end. |
-| Strategic terminal bidding / market power | ★★★★★ | ★★★☆☆ | Is truthful `b(.)` revelation incentive-compatible? Bilevel: ESS maximizes surplus over `b_hat`, subject to the ISO's LP. |
+| Strategic terminal bidding / market power | ★★★★★ | ★★★☆☆ | Is truthful `b(.)` revelation incentive-compatible? Bilevel: ESS maximizes surplus over `b_hat`, subject to the ISO's LP. Extends naturally to multiple co-located storage owners and to network congestion (a price-making ESS behind a binding line has more leverage than one on an uncongested copperplate). |
 | Price formation & dispatch degeneracy | ★★★★☆ | ★★★★☆ | See below -- this framework already surfaces a concrete, previously undocumented instance. |
 | Energy + ancillary-service co-optimization | ★★★★★ | ★★★☆☆ | Paper explicitly reserves this for a future paper by Baldick -- risk of being scooped. |
 | Realistic degradation & SOC-dependent efficiency | ★★★☆☆ | ★★★★★ | Appendix A.1 sketches SOC-dependent power limits and degradation; good extension, weaker novelty. |
@@ -73,6 +73,15 @@ at scale (hundreds of ESS, many tied interval pairs), and does the choice have r
 distributional consequences for ESS surplus even though total welfare is invariant?
 (Footnote 17 in the paper already flags that different tie-breaks redistribute ESS
 surplus without changing total cost.)
+
+**Independent corroboration**: an earlier, independently-written reproduction of the same
+three cases (flat `MarketData`/`StorageData` dataclasses, same `linprog(method="highs")`
+LP, different variable ordering) hard-asserted the paper's exact interval-3/4 split in its
+own regression tests. Running that code's own test suite in this environment (`pytest` on
+its `tests/test_paper_cases.py`) fails on precisely the interval-3/4 swap described above,
+for both the base case and the increased-max-SOC case -- a different implementation hitting
+the identical degeneracy is good evidence this is a structural property of the LP, not an
+artifact of one particular formulation.
 
 ## Deliberately deprioritized
 
