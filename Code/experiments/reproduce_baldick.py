@@ -24,25 +24,27 @@ def _system(s_max: float) -> System:
         demand=DEMAND,
         thermal=(ThermalGenerator("thermal", cost=THERMAL_COST, p_max=THERMAL_P_MAX),),
         renewables=(RenewableGenerator("renewable", capacity=RAC),),
-        storage=StorageParams(
-            alpha=ALPHA, beta=BETA, gamma=GAMMA,
-            s_min=0.0, s_max=s_max, s0=0.0,
-            epsilon=EPSILON, zeta=ZETA,
+        storages=(
+            StorageParams(
+                alpha=ALPHA, beta=BETA, gamma=GAMMA,
+                s_min=0.0, s_max=s_max, s0=0.0,
+                epsilon=EPSILON, zeta=ZETA,
+            ),
         ),
         dt=DT,
     )
 
 
 CASES = {
-    "base_case": (_system(s_max=800.0), constant_willingness_to_pay(40.0)),
-    "high_willingness_to_pay": (_system(s_max=800.0), constant_willingness_to_pay(55.0)),
-    "increased_max_soc": (_system(s_max=1200.0), constant_willingness_to_pay(40.0)),
+    "base_case": (_system(s_max=800.0), (constant_willingness_to_pay(40.0),)),
+    "high_willingness_to_pay": (_system(s_max=800.0), (constant_willingness_to_pay(55.0),)),
+    "increased_max_soc": (_system(s_max=1200.0), (constant_willingness_to_pay(40.0),)),
 }
 
 
 def run_case(name: str) -> DispatchResult:
-    system, terminal_value = CASES[name]
-    return solve_day_ahead(system, terminal_value)
+    system, terminal_values = CASES[name]
+    return solve_day_ahead(system, terminal_values)
 
 
 def main() -> None:
@@ -51,8 +53,8 @@ def main() -> None:
         print(f"\n=== {name} ===")
         print(result.to_frame().round(3).to_string())
         print(f"objective (net cost, $): {result.objective:,.2f}")
-        print(f"terminal value b(.) ($): {result.terminal_value:,.2f}")
-        print(f"ESS surplus ($): {result.ess_surplus:,.2f}")
+        print(f"terminal value b(.) ($): {result.terminal_value.sum():,.2f}")
+        print(f"ESS surplus ($): {result.ess_surplus.sum():,.2f}")
 
 
 if __name__ == "__main__":

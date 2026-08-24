@@ -17,8 +17,12 @@ dropped, or found to overlap with new literature.
    `tests/test_reproduce_baldick.py`). Dispatch, SOC checkpoints, and objective match
    Tables 2-4; degenerate quantities are documented rather than pinned to one arbitrary
    solver vertex (see "Price formation & dispatch degeneracy" below).
-2. **Generalize the code** -- arbitrary `T`, multiple thermal/renewable/storage units,
-   eventually a DC network (`network/copperplate.py` → `network/dcopf.py`, not yet built).
+2. **Generalize the code** -- multiple thermal/renewable/storage units done (`System`,
+   `solve_day_ahead`, and `DispatchResult` all support any number of each; every storage
+   unit carries its own independent terminal value function -- see
+   `experiments/Multi_Participant_Baldick.py`). Arbitrary `T` already worked (it was never
+   hardcoded). Still open: a DC network (`network/copperplate.py` → `network/dcopf.py`,
+   not yet built).
 3. **Conventional interval-bidding benchmark** -- implement the paired generator/load
    bid-and-offer model the paper critiques, on the *same* physical system, so efficiency
    loss from price-forecast error can be measured directly (`participants/price_taker.py`,
@@ -94,6 +98,15 @@ still free is about as clean a demonstration as this framework can produce that 
 properties of the optimum, not of any one solver's internals -- and a caution against ever
 hard-coding a specific degenerate split into a test, no matter how consistently one solver
 version currently reproduces it.
+
+**Third instance, multi-participant**: `experiments/Multi_Participant_Baldick.py` gives
+several renewable owners the same \$0/MWh offer price. The LP is indifferent about which
+specific owner supplies a given MW as long as each stays within its own capacity and the
+total is right -- the same tied-optimum structure, now between *N* symmetric-cost
+participants instead of two adjacent intervals. At the scale this framework eventually
+targets (paper Section 4.8's "well over 100 ESS"), an ISO would see this kind of tie
+constantly; which allocation rule it commits to is a live instance of the pricing/dispatch
+question above, not a corner case.
 
 ## Deliberately deprioritized
 

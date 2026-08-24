@@ -23,6 +23,7 @@ class StorageParams:
     g_max: float = math.inf
     epsilon: float = 0.0
     zeta: float = 0.0
+    name: str = "storage"
 
     def __post_init__(self) -> None:
         if not (self.beta > self.alpha > 0):

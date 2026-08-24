@@ -15,7 +15,10 @@ trajectory using its physical characteristics (round-trip efficiency, SOC limits
 degradation costs). The ESS's only private input is a concave **terminal value function**
 `b(s_T - sbar_T)`: its willingness-to-pay for ending the horizon with more or less energy
 than it would have had absent market participation. In a dynamic-programming reading, `b`
-is the value-to-go beyond the end of the horizon -- see `terminal_value/base.py`.
+is the value-to-go beyond the end of the horizon -- see `terminal_value/base.py`. `System`
+and `solve_day_ahead` support any number of thermal, renewable, and storage participants
+(each storage unit has its own independent terminal value function), not just Baldick's
+single aggregate of each -- see `experiments/Multi_Participant_Baldick.py`.
 
 ## Layout
 
@@ -24,7 +27,8 @@ core/               StorageParams, ThermalGenerator, RenewableGenerator, System
 terminal_value/     the b(.) bid function -- constant and piecewise-linear constructors
 markets/            day_ahead.py: builds and solves the ISO welfare-maximization LP with Gurobi
 experiments/        reproduce_baldick.py: the paper's three Section 4.7 examples
-notebooks/          reproduce_baldick.ipynb: the above, run and plotted
+                     Multi_Participant_Baldick.py: many renewable/thermal/storage owners competing
+notebooks/          the above, run and plotted
 tests/              regression tests locking the solver to Tables 2-4
 ```
 
@@ -46,9 +50,11 @@ license (e.g. a free academic one, if you're at a university) will be needed.
 ## Run
 
 ```
-python -m experiments.reproduce_baldick   # prints Tables 2-4 reproduced, plus objective/surplus
-pytest                                    # regression tests against the paper
-jupyter lab notebooks/reproduce_baldick.ipynb   # the same run, with tables and plots
+python -m experiments.reproduce_baldick             # prints Tables 2-4 reproduced, plus objective/surplus
+python -m experiments.Multi_Participant_Baldick     # many renewable/thermal/storage owners, one market
+pytest                                               # regression tests against the paper
+jupyter lab notebooks/reproduce_baldick.ipynb        # the above, with tables and plots
+jupyter lab notebooks/Multi_Participant_Baldick.ipynb
 ```
 
 If `jupyter`/`jupyter lab` itself won't launch (Windows "Application Control policy

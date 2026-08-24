@@ -75,8 +75,8 @@ def test_forced_dispatch_matches_paper(name: str) -> None:
     arrays = {
         "renewable": result.renewable[0],
         "thermal": result.thermal[0],
-        "discharge": result.discharge,
-        "charge": result.charge,
+        "discharge": result.discharge[0],
+        "charge": result.charge[0],
     }
     for series, expected_by_index in COMMON_FORCED.items():
         for i, value in expected_by_index.items():
@@ -90,7 +90,7 @@ def test_forced_dispatch_matches_paper(name: str) -> None:
 def test_soc_checkpoints_match_paper(name: str) -> None:
     result = run_case(name)
     for i, value in CASES[name]["soc"].items():
-        assert result.soc[i] == pytest.approx(value, abs=1e-2), f"{name}: soc[{i}]"
+        assert result.soc[0, i] == pytest.approx(value, abs=1e-2), f"{name}: soc[{i}]"
 
 
 @pytest.mark.parametrize("name", CASES.keys())
@@ -101,8 +101,8 @@ def test_degenerate_pairs_sum_to_paper_totals(name: str) -> None:
     arrays = {
         "renewable": result.renewable[0],
         "thermal": result.thermal[0],
-        "discharge": result.discharge,
-        "charge": result.charge,
+        "discharge": result.discharge[0],
+        "charge": result.charge[0],
     }
     for (i, j), totals in CASES[name]["pair_sums"].items():
         for series, expected_total in totals.items():
@@ -132,4 +132,4 @@ def test_ess_surplus_is_non_negative(name: str) -> None:
     # the optimum. The exact value depends on which (equally valid) degenerate price
     # is chosen for intervals 1 and, in the base case, 6 -- see footnote 17.
     result = run_case(name)
-    assert result.ess_surplus >= -1.0
+    assert result.ess_surplus[0] >= -1.0
