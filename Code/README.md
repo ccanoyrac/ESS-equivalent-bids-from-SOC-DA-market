@@ -24,6 +24,7 @@ core/               StorageParams, ThermalGenerator, RenewableGenerator, System
 terminal_value/     the b(.) bid function -- constant and piecewise-linear constructors
 markets/            day_ahead.py: builds and solves the ISO welfare-maximization LP
 experiments/        reproduce_baldick.py: the paper's three Section 4.7 examples
+notebooks/          reproduce_baldick.ipynb: the above, run and plotted
 tests/              regression tests locking the solver to Tables 2-4
 ```
 
@@ -32,15 +33,24 @@ tests/              regression tests locking the solver to Tables 2-4
 ```
 python -m venv .venv
 .venv/Scripts/activate           # .venv/bin/activate on macOS/Linux
-pip install -e ".[dev]"
+pip install -e ".[dev,viz,notebook]"
 ```
+
+`viz` and `notebook` are optional -- skip them if you only need `pytest` and the plain
+script below.
 
 ## Run
 
 ```
 python -m experiments.reproduce_baldick   # prints Tables 2-4 reproduced, plus objective/surplus
 pytest                                    # regression tests against the paper
+jupyter lab notebooks/reproduce_baldick.ipynb   # the same run, with tables and plots
 ```
+
+If `jupyter`/`jupyter lab` itself won't launch (Windows "Application Control policy
+blocked this file" on the console-script shim), run nbconvert as a module instead,
+which sidesteps the shim entirely:
+`python -m nbconvert --to notebook --execute --inplace notebooks/reproduce_baldick.ipynb`.
 
 ## A note on non-uniqueness
 
