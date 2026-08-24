@@ -5,14 +5,21 @@ built on top of Baldick (2026) Section 4.7's system. Run as
 Modeling choices (the prompt underspecifies exact numbers, so these are documented so
 they're easy to change):
 
-- Demand is Baldick's own profile, unchanged, so the system stays comparable in scale
-  to reproduce_baldick.py's results.
-- Renewables all share one base forecast -- Baldick's RAC profile split evenly across
-  N_RENEWABLE owners (their "fair share") -- each with its own small, independent,
-  zero-mean deviation from that shared shape, clipped so capacity never goes negative.
-  Splitting (rather than giving every owner the full RAC) keeps total system-wide
-  renewable capacity unchanged; giving each their own noise is what makes them distinct
-  participants rather than N copies of one unit.
+- Thermal (N_PARTICIPANTS owners, each capacity ~ Baldick's single 100 MW unit) and
+  storage (each s_max = Baldick's single 800 MWh unit) are both built at roughly
+  Baldick's *original per-unit scale*, so with N_PARTICIPANTS=4 of each, total thermal
+  and storage capacity are both ~4x Baldick's single-participant system. Demand and the
+  shared renewable forecast are scaled by the same DEMAND_SCALE factor to match --
+  scaling demand alone while leaving renewable flat would leave renewable comically
+  undersized relative to the new demand (thermal+renewable capacity would fall short of
+  demand in some intervals even with storage straining to cover the gap) and would break
+  the renewable-penetration story that makes Baldick's example worth reproducing.
+  Scaling both keeps demand:renewable:thermal:storage in Baldick's original proportions,
+  just uniformly bigger.
+- Renewables all share one base forecast -- Baldick's RAC profile, scaled by
+  DEMAND_SCALE and then split evenly across N_PARTICIPANTS owners (their "fair share")
+  -- each with its own small, independent, zero-mean deviation from that shared shape,
+  clipped so capacity never goes negative.
 - Thermal owners each get a capacity drawn uniformly in [100, 150] MW and a cost that's
   Baldick's $50/MWh plus a small, fixed (non-intertemporal -- constant across t, only
   varying owner to owner) deviation, which is what creates a merit-order competition.
@@ -35,13 +42,13 @@ from terminal_value.constant import constant_willingness_to_pay
 
 SEED = 7
 
-DEMAND = (100.0, 200.0, 300.0, 300.0, 200.0, 100.0)
+N_PARTICIPANTS = 4  # owners of each type: renewable, thermal, storage
+DEMAND_SCALE = float(N_PARTICIPANTS)
+
+BASE_DEMAND = (100.0, 200.0, 300.0, 300.0, 200.0, 100.0)
+DEMAND = tuple(d * DEMAND_SCALE for d in BASE_DEMAND)
 BASE_RAC = (200.0, 100.0, 500.0, 500.0, 25.0, 0.0)
 DT = 4.0
-
-N_RENEWABLE = 4
-N_THERMAL = 4
-N_STORAGE = 4
 
 RENEWABLE_NOISE_FRACTION = 0.08  # std dev of each owner's deviation, as a fraction of its fair share
 
@@ -58,9 +65,9 @@ STORAGE_WTP = (25.0, 40.0, 55.0, 70.0)
 
 
 def _renewables(rng: np.random.Generator) -> tuple[RenewableGenerator, ...]:
-    fair_share = np.array(BASE_RAC) / N_RENEWABLE
+    fair_share = np.array(BASE_RAC) * DEMAND_SCALE / N_PARTICIPANTS
     generators = []
-    for i in range(N_RENEWABLE):
+    for i in range(N_PARTICIPANTS):
         noise = rng.normal(loc=0.0, scale=RENEWABLE_NOISE_FRACTION * fair_share)
         capacity = tuple(np.clip(fair_share + noise, 0.0, None).round(3))
         generators.append(RenewableGenerator(f"renewable_{i + 1}", capacity=capacity))
@@ -69,7 +76,7 @@ def _renewables(rng: np.random.Generator) -> tuple[RenewableGenerator, ...]:
 
 def _thermal_units(rng: np.random.Generator) -> tuple[ThermalGenerator, ...]:
     generators = []
-    for i in range(N_THERMAL):
+    for i in range(N_PARTICIPANTS):
         p_max = round(float(rng.uniform(*THERMAL_P_MAX_RANGE)), 3)
         cost = round(THERMAL_BASE_COST + float(rng.uniform(-THERMAL_COST_SPREAD, THERMAL_COST_SPREAD)), 3)
         generators.append(ThermalGenerator(f"thermal_{i + 1}", cost=cost, p_max=p_max))
@@ -84,7 +91,7 @@ def _storages() -> tuple[StorageParams, ...]:
             epsilon=EPSILON, zeta=ZETA,
             name=f"storage_{i + 1}",
         )
-        for i in range(N_STORAGE)
+        for i in range(N_PARTICIPANTS)
     )
 
 
