@@ -22,7 +22,7 @@ is the value-to-go beyond the end of the horizon -- see `terminal_value/base.py`
 ```
 core/               StorageParams, ThermalGenerator, RenewableGenerator, System
 terminal_value/     the b(.) bid function -- constant and piecewise-linear constructors
-markets/            day_ahead.py: builds and solves the ISO welfare-maximization LP
+markets/            day_ahead.py: builds and solves the ISO welfare-maximization LP with Gurobi
 experiments/        reproduce_baldick.py: the paper's three Section 4.7 examples
 notebooks/          reproduce_baldick.ipynb: the above, run and plotted
 tests/              regression tests locking the solver to Tables 2-4
@@ -37,7 +37,11 @@ pip install -e ".[dev,viz,notebook]"
 ```
 
 `viz` and `notebook` are optional -- skip them if you only need `pytest` and the plain
-script below.
+script below. `gurobipy` is a core dependency and needs no license setup: its pip package
+ships a free "size-limited" license good for up to 2000 variables/constraints, which the
+examples here (~50 variables) are nowhere near. That cap will eventually matter for
+ROADMAP.md stage 2 ("well over 100 ESS" per paper Section 4.8) -- at that point a real
+license (e.g. a free academic one, if you're at a university) will be needed.
 
 ## Run
 
@@ -60,8 +64,8 @@ related fact the paper doesn't spell out: **parts of the primal dispatch aren't 
 either.** Intervals 3-4 share identical demand (300 MW) and RAC (500 MW); in the base case,
 thermal (interior, not at a bound) and storage discharge tie exactly in marginal cost
 across intervals 5-6. Both are genuine continuous degeneracies -- confirmed algebraically,
-not solver quirks -- so the specific interval-by-interval split you get from `scipy`'s HiGHS
-solver can differ from the paper's chosen vertex while the *sums* across each tied pair, the
+not solver quirks -- so the specific interval-by-interval split you get from Gurobi's
+simplex can differ from the paper's chosen vertex while the *sums* across each tied pair, the
 SOC at every bracketing checkpoint, and the total objective are always identical. See
 `tests/test_reproduce_baldick.py` for exactly what's asserted exact vs. as a pair-sum/range,
 and ROADMAP.md's pricing section for why this matters for the thesis.

@@ -5,8 +5,8 @@ description = "SOC-based electricity storage market design (Baldick 2026) -- rep
 requires-python = ">=3.10"
 dependencies = [
     "numpy>=1.26",
-    "scipy>=1.11",
     "pandas>=2.0",
+    "gurobipy>=11.0",
 ]
 
 [project.optional-dependencies]

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 
+import gurobipy as gp
 import numpy as np
 import pandas as pd
-from scipy.optimize import linprog
+from gurobipy import GRB
 
 from core.system import System
 from terminal_value.base import TerminalValueFunction
@@ -46,181 +46,133 @@ class DispatchResult:
         )
 
 
-def _bound(value: float) -> float | None:
-    return None if math.isinf(value) else value
+def _ub(value: float) -> float:
+    return GRB.INFINITY if value == float("inf") else value
 
 
 def solve_day_ahead(system: System, terminal_value: TerminalValueFunction) -> DispatchResult:
-    """Solve the ISO welfare-maximizing dispatch (9) as a linear program, with the
-    complementarity condition p_t perp g_t (3) relaxed as in the paper's own examples.
+    """Solve the ISO welfare-maximizing dispatch (9) with Gurobi, with the complementarity
+    condition p_t perp g_t (3) relaxed as in the paper's own examples.
 
     min  dt*sum(cost_g * thermal_g,t) + dt*sum(cost_r * renewable_r,t)
        + dt*sum(epsilon*p_t + zeta*g_t) - b(s_T - sbar_T)
     s.t. SOC dynamics (4), SOC limits (6)-(7), power balance, generation and storage bounds.
+
+    Uses the gurobipy package's built-in size-limited free license, which needs no setup
+    and comfortably covers problems this size; a real (e.g. academic) license would be
+    needed for the large-scale systems described in ROADMAP.md stage 2 (paper Section 4.8
+    reports well over 100 ESS on an hourly 24-interval horizon).
     """
     T = system.T
     dt = system.dt
     storage = system.storage
     sbar_T = storage.sbar_T(T)
-    n_th, n_re = len(system.thermal), len(system.renewables)
     upside, downside = terminal_value.lp_segments()
-    n_up, n_down = len(upside), len(downside)
 
-    idx: dict[str, slice] = {}
-    cursor = 0
+    with gp.Env(params={"OutputFlag": 0}) as env, gp.Model("day_ahead", env=env) as model:
+        thermal = {
+            (g, t): model.addVar(lb=gen.p_min, ub=_ub(gen.p_max), name=f"thermal[{gen.name},{t}]")
+            for g, gen in enumerate(system.thermal)
+            for t in range(T)
+        }
+        renewable = {
+            (r, t): model.addVar(lb=0.0, ub=gen.capacity[t], name=f"renewable[{gen.name},{t}]")
+            for r, gen in enumerate(system.renewables)
+            for t in range(T)
+        }
+        charge = model.addVars(T, lb=0.0, ub=_ub(storage.p_max), name="charge")
+        discharge = model.addVars(T, lb=0.0, ub=_ub(storage.g_max), name="discharge")
+        soc = model.addVars(T, lb=storage.s_min, ub=storage.s_max, name="soc")
+        up = [model.addVar(lb=0.0, ub=_ub(width), name=f"up[{k}]") for k, (width, _) in enumerate(upside)]
+        down = [model.addVar(lb=0.0, ub=_ub(width), name=f"down[{k}]") for k, (width, _) in enumerate(downside)]
 
-    def alloc(name: str, count: int) -> None:
-        nonlocal cursor
-        idx[name] = slice(cursor, cursor + count)
-        cursor += count
+        def soc_before(t: int):
+            return soc[t - 1] if t > 0 else storage.s0
 
-    alloc("thermal", n_th * T)
-    alloc("renewable", n_re * T)
-    alloc("charge", T)
-    alloc("discharge", T)
-    alloc("soc", T)
-    alloc("up", n_up)
-    alloc("down", n_down)
-    n_vars = cursor
+        # SOC dynamics (eq. 4): s_t = dt*alpha*p_t - dt*beta*g_t + gamma*s_{t-1}
+        model.addConstrs(
+            (
+                soc[t] == dt * storage.alpha * charge[t] - dt * storage.beta * discharge[t] + storage.gamma * soc_before(t)
+                for t in range(T)
+            ),
+            name="soc_dynamics",
+        )
 
-    th_idx = lambda g, t: idx["thermal"].start + g * T + t
-    re_idx = lambda r, t: idx["renewable"].start + r * T + t
-    p_idx = lambda t: idx["charge"].start + t
-    g_idx = lambda t: idx["discharge"].start + t
-    s_idx = lambda t: idx["soc"].start + t
+        # Tight SOC upper bound (eq. 6): gamma*s_{t-1} + dt*alpha*p_t <= s_max
+        model.addConstrs(
+            (storage.gamma * soc_before(t) + dt * storage.alpha * charge[t] <= storage.s_max for t in range(T)),
+            name="soc_upper",
+        )
 
-    c = np.zeros(n_vars)
-    for g, gen in enumerate(system.thermal):
-        c[[th_idx(g, t) for t in range(T)]] = dt * gen.cost
-    for r, gen in enumerate(system.renewables):
-        c[[re_idx(r, t) for t in range(T)]] = dt * gen.cost
-    c[idx["charge"]] = dt * storage.epsilon
-    c[idx["discharge"]] = dt * storage.zeta
-    for k, (_, mv) in enumerate(upside):
-        c[idx["up"].start + k] = -mv
-    for k, (_, mv) in enumerate(downside):
-        c[idx["down"].start + k] = mv
+        # Tight SOC lower bound (eq. 7): gamma*s_{t-1} - dt*beta*g_t >= s_min
+        model.addConstrs(
+            (storage.gamma * soc_before(t) - dt * storage.beta * discharge[t] >= storage.s_min for t in range(T)),
+            name="soc_lower",
+        )
 
-    bounds: list[tuple[float, float | None]] = [(0.0, None)] * n_vars
-    for g, gen in enumerate(system.thermal):
-        for t in range(T):
-            bounds[th_idx(g, t)] = (gen.p_min, _bound(gen.p_max))
-    for r, gen in enumerate(system.renewables):
-        for t in range(T):
-            bounds[re_idx(r, t)] = (0.0, gen.capacity[t])
-    for t in range(T):
-        bounds[p_idx(t)] = (0.0, _bound(storage.p_max))
-        bounds[g_idx(t)] = (0.0, _bound(storage.g_max))
-        bounds[s_idx(t)] = (storage.s_min, storage.s_max)
-    for k, (width, _) in enumerate(upside):
-        bounds[idx["up"].start + k] = (0.0, _bound(width))
-    for k, (width, _) in enumerate(downside):
-        bounds[idx["down"].start + k] = (0.0, _bound(width))
+        # Power balance: thermal + renewable + discharge - charge = demand
+        balance = model.addConstrs(
+            (
+                gp.quicksum(thermal[g, t] for g in range(len(system.thermal)))
+                + gp.quicksum(renewable[r, t] for r in range(len(system.renewables)))
+                + discharge[t]
+                - charge[t]
+                == system.demand[t]
+                for t in range(T)
+            ),
+            name="balance",
+        )
 
-    A_eq, b_eq = [], []
+        # Terminal deviation link: s_T = sbar_T + sum(up) - sum(down)
+        model.addConstr(
+            soc[T - 1] - gp.quicksum(up) + gp.quicksum(down) == sbar_T,
+            name="terminal_deviation",
+        )
 
-    # SOC dynamics (4): s_t - gamma*s_{t-1} - dt*alpha*p_t + dt*beta*g_t = 0
-    for t in range(T):
-        row = np.zeros(n_vars)
-        row[s_idx(t)] = 1.0
-        row[p_idx(t)] = -dt * storage.alpha
-        row[g_idx(t)] = dt * storage.beta
-        if t == 0:
-            rhs = storage.gamma * storage.s0
-        else:
-            row[s_idx(t - 1)] = -storage.gamma
-            rhs = 0.0
-        A_eq.append(row)
-        b_eq.append(rhs)
+        model.setObjective(
+            dt * gp.quicksum(gen.cost * thermal[g, t] for g, gen in enumerate(system.thermal) for t in range(T))
+            + dt * gp.quicksum(gen.cost * renewable[r, t] for r, gen in enumerate(system.renewables) for t in range(T))
+            + dt * gp.quicksum(storage.epsilon * charge[t] + storage.zeta * discharge[t] for t in range(T))
+            - gp.quicksum(mv * up[k] for k, (_, mv) in enumerate(upside))
+            + gp.quicksum(mv * down[k] for k, (_, mv) in enumerate(downside)),
+            GRB.MINIMIZE,
+        )
 
-    # power balance: thermal + renewable + discharge - charge = demand
-    for t in range(T):
-        row = np.zeros(n_vars)
-        for g in range(n_th):
-            row[th_idx(g, t)] = 1.0
-        for r in range(n_re):
-            row[re_idx(r, t)] = 1.0
-        row[g_idx(t)] = 1.0
-        row[p_idx(t)] = -1.0
-        A_eq.append(row)
-        b_eq.append(system.demand[t])
+        model.optimize()
+        if model.Status != GRB.OPTIMAL:
+            raise RuntimeError(f"day-ahead LP failed to solve: Gurobi status {model.Status}")
 
-    # terminal deviation link: s_T - sum(up) + sum(down) = sbar_T
-    row = np.zeros(n_vars)
-    row[s_idx(T - 1)] = 1.0
-    for k in range(n_up):
-        row[idx["up"].start + k] = -1.0
-    for k in range(n_down):
-        row[idx["down"].start + k] = 1.0
-    A_eq.append(row)
-    b_eq.append(sbar_T)
+        thermal_arr = np.array(
+            [[thermal[g, t].X for t in range(T)] for g in range(len(system.thermal))]
+        ).reshape(len(system.thermal), T)
+        renewable_arr = np.array(
+            [[renewable[r, t].X for t in range(T)] for r in range(len(system.renewables))]
+        ).reshape(len(system.renewables), T)
+        charge_arr = np.array([charge[t].X for t in range(T)])
+        discharge_arr = np.array([discharge[t].X for t in range(T)])
+        soc_arr = np.array([soc[t].X for t in range(T)])
 
-    A_ub, b_ub = [], []
+        # The balance constraint's dual is $ per unit of its MW right-hand side; divide by
+        # dt to convert to the conventional $/MWh LMP.
+        price = np.array([balance[t].Pi for t in range(T)]) / dt
+        objective = model.ObjVal
 
-    # (6): gamma*s_{t-1} + dt*alpha*p_t <= s_max
-    for t in range(T):
-        row = np.zeros(n_vars)
-        row[p_idx(t)] = dt * storage.alpha
-        if t == 0:
-            rhs = storage.s_max - storage.gamma * storage.s0
-        else:
-            row[s_idx(t - 1)] = storage.gamma
-            rhs = storage.s_max
-        A_ub.append(row)
-        b_ub.append(rhs)
-
-    # (7): gamma*s_{t-1} - dt*beta*g_t >= s_min  <=>  -gamma*s_{t-1} + dt*beta*g_t <= -s_min
-    for t in range(T):
-        row = np.zeros(n_vars)
-        row[g_idx(t)] = dt * storage.beta
-        if t == 0:
-            rhs = storage.gamma * storage.s0 - storage.s_min
-        else:
-            row[s_idx(t - 1)] = -storage.gamma
-            rhs = -storage.s_min
-        A_ub.append(row)
-        b_ub.append(rhs)
-
-    result = linprog(
-        c,
-        A_ub=np.array(A_ub),
-        b_ub=np.array(b_ub),
-        A_eq=np.array(A_eq),
-        b_eq=np.array(b_eq),
-        bounds=bounds,
-        method="highs",
-    )
-    if not result.success:
-        raise RuntimeError(f"day-ahead LP failed to solve: {result.message}")
-
-    x = result.x
-    thermal = x[idx["thermal"]].reshape(n_th, T) if n_th else np.zeros((0, T))
-    renewable = x[idx["renewable"]].reshape(n_re, T) if n_re else np.zeros((0, T))
-    charge = x[idx["charge"]]
-    discharge = x[idx["discharge"]]
-    soc = x[idx["soc"]]
-
-    # power-balance equality rows follow the T SOC-dynamics rows in A_eq. Divide by dt
-    # because the balance constraint is in MW while the dual is $ per unit of that
-    # constraint's RHS (MW); dt converts it to the conventional $/MWh LMP.
-    price = result.eqlin.marginals[T : T + T] / dt
-
-    deviation = float(soc[-1] - sbar_T)
+    deviation = float(soc_arr[-1] - sbar_T)
     term_value = terminal_value.value(deviation)
 
-    revenue = dt * float(np.dot(price, discharge))
-    charge_cost = dt * float(np.dot(price, charge))
-    degradation = dt * (storage.epsilon * float(np.sum(charge)) + storage.zeta * float(np.sum(discharge)))
+    revenue = dt * float(np.dot(price, discharge_arr))
+    charge_cost = dt * float(np.dot(price, charge_arr))
+    degradation = dt * (storage.epsilon * float(np.sum(charge_arr)) + storage.zeta * float(np.sum(discharge_arr)))
     ess_surplus = revenue - charge_cost + term_value - degradation
 
     return DispatchResult(
-        thermal=thermal,
-        renewable=renewable,
-        charge=charge,
-        discharge=discharge,
-        soc=soc,
+        thermal=thermal_arr,
+        renewable=renewable_arr,
+        charge=charge_arr,
+        discharge=discharge_arr,
+        soc=soc_arr,
         price=price,
-        objective=float(result.fun),
+        objective=float(objective),
         terminal_value=term_value,
         ess_surplus=ess_surplus,
     )

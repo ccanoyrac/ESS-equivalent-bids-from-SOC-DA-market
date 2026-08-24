@@ -83,6 +83,18 @@ for both the base case and the increased-max-SOC case -- a different implementat
 the identical degeneracy is good evidence this is a structural property of the LP, not an
 artifact of one particular formulation.
 
+**Second corroboration, same codebase**: switching `markets/day_ahead.py` itself from
+`scipy`'s HiGHS to Gurobi (same equations, same `System`/`TerminalValueFunction` objects,
+only the solver call changed) flipped which vertex gets picked for the interval-3/4 tie --
+Gurobi's simplex now lands exactly on the paper's own split in all three cases, where HiGHS
+picked the opposite one. The interval-5/6 tie in the base case, however, stayed genuinely
+free under both solvers (different splits, same $75 thermal / 200 MWh discharge totals).
+That two different solvers *disagree* on one tied pair while *agreeing* the other pair is
+still free is about as clean a demonstration as this framework can produce that these are
+properties of the optimum, not of any one solver's internals -- and a caution against ever
+hard-coding a specific degenerate split into a test, no matter how consistently one solver
+version currently reproduces it.
+
 ## Deliberately deprioritized
 
 - **Ancillary services co-optimization**: Baldick explicitly reserves this for a
