@@ -95,6 +95,27 @@ def _storages() -> tuple[StorageParams, ...]:
     )
 
 
+def with_renewable_scale(system: System, factor: float) -> System:
+    """A copy of `system` with every renewable's available capacity (RAC) multiplied by
+    `factor`; thermal, storage, demand, and dt are unchanged. For isolating the effect of
+    renewable penetration on ESS outcomes (ROADMAP.md stage 5) -- rescaling an
+    already-built system's capacities, rather than redrawing renewables at a different
+    scale, keeps the comparison controlled: same thermal draw, same storage bids, same
+    demand, only the renewable magnitude changes.
+    """
+    scaled_renewables = tuple(
+        RenewableGenerator(gen.name, capacity=tuple(c * factor for c in gen.capacity), cost=gen.cost)
+        for gen in system.renewables
+    )
+    return System(
+        demand=system.demand,
+        thermal=system.thermal,
+        renewables=scaled_renewables,
+        storages=system.storages,
+        dt=system.dt,
+    )
+
+
 def build_system() -> tuple[System, tuple]:
     rng = np.random.default_rng(SEED)
     system = System(
