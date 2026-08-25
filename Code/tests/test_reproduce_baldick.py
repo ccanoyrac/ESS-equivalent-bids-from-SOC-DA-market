@@ -18,8 +18,10 @@ come out unique here).
 
 from __future__ import annotations
 
+import numpy as np
 import pytest
 
+from experiments.reproduce_baldick import CASES as SYSTEM_CASES
 from experiments.reproduce_baldick import run_case
 
 # Common to all three cases: intervals 1-2 are never part of a tie (no other interval
@@ -139,3 +141,26 @@ def test_ess_surplus_is_non_negative(name: str) -> None:
     # is chosen where a genuine range exists -- see footnote 17.
     result = run_case(name)
     assert result.ess_surplus[0] >= -1.0
+
+
+@pytest.mark.parametrize("name", CASES.keys())
+def test_owner_frame_sums_to_system_frame(name: str) -> None:
+    # to_owner_frame breaks each quantity out by individual owner; summing those owners
+    # back together must reproduce to_frame()'s system-wide totals exactly.
+    system, terminal_values = SYSTEM_CASES[name]
+    result = run_case(name)
+    owner_frame = result.to_owner_frame(system)
+    system_frame = result.to_frame()
+
+    for label, column in [
+        ("Renewable (MW)", "Renewable (MW)"),
+        ("Thermal (MW)", "Thermal (MW)"),
+        ("ESS discharge (MW)", "ESS discharge (MW)"),
+        ("ESS charge (MW)", "ESS charge (MW)"),
+        ("SOC (MWh)", "SOC (MWh)"),
+    ]:
+        summed = owner_frame[label].sum(axis=1)
+        np.testing.assert_allclose(summed.to_numpy(), system_frame[column].to_numpy(), atol=1e-6)
+    np.testing.assert_allclose(
+        owner_frame["Price ($/MWh)"].to_numpy().squeeze(), system_frame["Price ($/MWh)"].to_numpy(), atol=1e-6
+    )

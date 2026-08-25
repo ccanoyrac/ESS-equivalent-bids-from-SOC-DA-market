@@ -48,6 +48,29 @@ class DispatchResult:
             index=pd.RangeIndex(1, T + 1, name="Interval"),
         )
 
+    def to_owner_frame(self, system: System) -> pd.DataFrame:
+        """Same quantities as `to_frame()`, broken out by individual owner instead of
+        summed -- e.g. for seeing how each thermal/renewable/storage participant in
+        `experiments/Multi_Participant_Baldick.py` fares individually. Columns are a
+        2-level MultiIndex (quantity, owner name); Price is system-wide, so its owner
+        level is blank.
+        """
+        T = len(self.price)
+        index = pd.RangeIndex(1, T + 1, name="Interval")
+
+        def block(values: np.ndarray, label: str, names: list[str]) -> pd.DataFrame:
+            return pd.DataFrame(values.T.round(6), columns=pd.MultiIndex.from_product([[label], names]), index=index)
+
+        parts = [
+            block(self.renewable, "Renewable (MW)", [g.name for g in system.renewables]),
+            block(self.thermal, "Thermal (MW)", [g.name for g in system.thermal]),
+            block(self.discharge, "ESS discharge (MW)", [s.name for s in system.storages]),
+            block(self.charge, "ESS charge (MW)", [s.name for s in system.storages]),
+            block(self.soc, "SOC (MWh)", [s.name for s in system.storages]),
+        ]
+        price_col = pd.DataFrame({("Price ($/MWh)", ""): self.price.round(6)}, index=index)
+        return pd.concat(parts + [price_col], axis=1)
+
 
 def _ub(value: float) -> float:
     return GRB.INFINITY if value == float("inf") else value
