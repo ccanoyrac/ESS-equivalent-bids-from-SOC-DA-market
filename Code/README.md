@@ -26,6 +26,7 @@ single aggregate of each -- see `experiments/Multi_Participant_Baldick.py`.
 core/               StorageParams, ThermalGenerator, RenewableGenerator, System
 terminal_value/     the b(.) bid function -- constant and piecewise-linear constructors
 markets/            day_ahead.py: builds and solves the ISO welfare-maximization LP with Gurobi
+                    pricing.py: explicit LP dual, for price tie-breaking and true price ranges
 experiments/        reproduce_baldick.py: the paper's three Section 4.7 examples
                      Multi_Participant_Baldick.py: many renewable/thermal/storage owners competing
 notebooks/          the above, run and plotted
@@ -64,14 +65,20 @@ which sidesteps the shim entirely:
 
 ## A note on non-uniqueness
 
-The paper flags that clearing prices in interval 1 (and interval 6 of the base case) are
-not unique -- any price in a stated range is dual-feasible. Running this solver surfaces a
-related fact the paper doesn't spell out: **parts of the primal dispatch aren't unique
-either.** Intervals 3-4 share identical demand (300 MW) and RAC (500 MW); in the base case,
-thermal (interior, not at a bound) and storage discharge tie exactly in marginal cost
-across intervals 5-6. Both are genuine continuous degeneracies -- confirmed algebraically,
-not solver quirks -- so the specific interval-by-interval split you get from Gurobi's
-simplex can differ from the paper's chosen vertex while the *sums* across each tied pair, the
-SOC at every bracketing checkpoint, and the total objective are always identical. See
-`tests/test_reproduce_baldick.py` for exactly what's asserted exact vs. as a pair-sum/range,
-and ROADMAP.md's pricing section for why this matters for the thesis.
+The paper's text says clearing prices in interval 1 (and interval 6 of the base case) are
+not unique -- any price in a stated range is dual-feasible. Don't take that on trust:
+`markets/pricing.py` builds the LP's actual dual and computes the true `[min, max]` price
+at every interval (`markets.day_ahead.price_ranges`), validated via strong duality and an
+infeasibility certificate (`computeIIS`), not just "the optimizer couldn't improve it."
+Doing that shows those two specific claims don't hold in this exact reproduction -- both
+intervals come out dual-*unique*. The only genuine price range across all three cases is
+the high-willingness-to-pay case's interval 6 (\$50-\$56/MWh); `solve_day_ahead(...,
+price_rule="min"|"max")` reports the low/high end of it on request, matching the
+tie-breaking convention the paper's own tables use elsewhere. See ROADMAP.md's pricing
+section for the full sweep and for a related but *different* fact: **parts of the primal
+dispatch aren't unique either** -- intervals 3-4 share identical demand (300 MW) and RAC
+(500 MW), and in the base case thermal and storage discharge tie exactly in marginal cost
+across intervals 5-6. That's a genuine continuous degeneracy too, confirmed algebraically,
+but it doesn't line up with which intervals turn out to be price-degenerate -- the two
+kinds of non-uniqueness are independent. See `tests/test_reproduce_baldick.py` for exactly
+what's asserted exact vs. as a pair-sum/range/price_rule-bracket.

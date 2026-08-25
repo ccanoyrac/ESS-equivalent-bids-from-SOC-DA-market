@@ -50,8 +50,17 @@ dropped, or found to overlap with new literature.
 ## Price formation & dispatch degeneracy (concrete finding)
 
 The archive discussion flagged that interval-1 (and, in the base case, interval-6)
-clearing prices are non-unique. Running the actual solver surfaces a related, sharper
-fact: **the primal dispatch is not fully unique either.**
+clearing prices are non-unique -- taking the paper's own text at face value. Building an
+actual tool to check this (below) shows that claim doesn't hold in this exact
+reproduction: interval 1 is dual-*unique* at \$43.1/MWh in all three cases, and so is the
+base case's interval 6 (\$50/MWh) -- only the high-willingness-to-pay case's interval 6
+turns out to have a genuine range. Rather than silently fix the earlier claim, it's worth
+keeping the correction visible: trusting a paper's stated range instead of independently
+verifying it is exactly the kind of mistake this framework exists to catch. Running the
+solver also surfaces a related, sharper fact: **the primal dispatch is not fully unique
+either** -- and, importantly, primal degeneracy and price (dual) degeneracy turn out to
+be *different* phenomena that don't necessarily co-occur at the same intervals (see
+below).
 
 - Intervals 3-4 have identical demand (300 MW) and RAC (500 MW) in every example case, so
   any split of renewable dispatch/charging between them that respects the running SOC
@@ -98,6 +107,46 @@ still free is about as clean a demonstration as this framework can produce that 
 properties of the optimum, not of any one solver's internals -- and a caution against ever
 hard-coding a specific degenerate split into a test, no matter how consistently one solver
 version currently reproduces it.
+
+**Rigorous verification via the explicit LP dual** (`markets/pricing.py`): rather than
+trust a solver's arbitrary tie-break or a paper's stated range, `_build_dual` constructs
+the actual LP dual of a solved Gurobi model generically (from `model.getVars()`,
+`model.getConstrs()`, `model.getCol()` -- works on any Gurobi model, not just this
+package's), fixes it to the primal's own optimal objective value (any dual-feasible point
+matching that value is, by strong duality, itself an optimal dual solution), and
+re-solves for the min/max of any chosen dual variable. Validated two ways before trusting
+it: (1) solving the dual with a neutral objective reproduces Gurobi's own reported prices
+to 10+ decimal places, and (2) `computeIIS()` confirms $0/MWh is *infeasible* for
+interval 1 given the fixed-objective constraint, not just unreached by an optimizer --
+i.e. the uniqueness is a real property of the feasible region, not a search artifact.
+Two public entry points came out of this: `solve_day_ahead(..., price_rule="min"|"max")`
+reports the lowest/highest self-consistent price vector instead of Gurobi's arbitrary
+one (dispatch and objective are unaffected, since price selection doesn't feed back into
+the primal), and `price_ranges(system, terminal_values)` returns the true `[min, max]`
+at every interval -- the diagnostic that produced the table below and that
+`tests/test_reproduce_baldick.py` now asserts against directly, rather than against
+values transcribed from the paper.
+
+Sweeping every interval of all three cases:
+
+| Interval | base_case | high_willingness_to_pay | increased_max_soc |
+|---|---|---|---|
+| 1 | 43.1 (unique) | 43.1 (unique) | 43.1 (unique) |
+| 2 | 50 (unique) | 50 (unique) | 50 (unique) |
+| 3 | 0 (unique) | 0 (unique) | 0 (unique) |
+| 4 | 0 (unique) | 0 (unique) | 0 (unique) |
+| 5 | 50 (unique) | 56 (unique) | 41 (unique) |
+| 6 | 50 (unique) | **[50, 56]** | 41 (unique) |
+
+Only one genuine price range exists across all eighteen interval/case combinations. That
+it shows up in a *different* case and interval than the ranges the paper's text
+describes for the base case is itself informative: primal-dispatch degeneracy (intervals
+3-4 always, interval 5-6 in the base case only) and price degeneracy (interval 6, high-w
+case only) don't track each other. A tied pair of intervals with multiple valid dispatch
+splits can still have a fully unique clearing price throughout (as in the base case's
+5-6), and conversely a single interval can be price-degenerate without any adjacent
+primal tie explaining it (high-w's interval 6). Worth treating as its own open question
+rather than assuming one implies the other.
 
 **Third instance, multi-participant**: `experiments/Multi_Participant_Baldick.py` gives
 several renewable owners the same \$0/MWh offer price. The LP is indifferent about which

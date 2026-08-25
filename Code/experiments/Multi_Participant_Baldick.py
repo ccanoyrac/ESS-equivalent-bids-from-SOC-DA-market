@@ -53,7 +53,7 @@ DT = 4.0
 RENEWABLE_NOISE_FRACTION = 0.08  # std dev of each owner's deviation, as a fraction of its fair share
 
 THERMAL_BASE_COST = 50.0
-THERMAL_COST_SPREAD = 3.0  # +/- $/MWh around the base cost, fixed per owner (not intertemporal)
+THERMAL_COST_SPREAD = 15.0  # +/- $/MWh around the base cost, fixed per owner (not intertemporal)
 THERMAL_P_MAX_RANGE = (100.0, 150.0)
 
 ALPHA, BETA, GAMMA = 0.9, 1.0, 1.0

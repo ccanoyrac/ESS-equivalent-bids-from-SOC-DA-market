@@ -9,6 +9,7 @@ import pandas as pd
 from gurobipy import GRB
 
 from core.system import System
+from markets.pricing import price_range_at, tie_break_prices
 from terminal_value.base import TerminalValueFunction
 
 
@@ -53,23 +54,11 @@ def _ub(value: float) -> float:
     return GRB.INFINITY if value == float("inf") else value
 
 
-def solve_day_ahead(system: System, terminal_values: Sequence[TerminalValueFunction]) -> DispatchResult:
-    """Solve the ISO welfare-maximizing dispatch (9) with Gurobi, with the complementarity
-    condition p_t perp g_t (3) relaxed as in the paper's own examples.
-
-    min  dt*sum(cost_g * thermal_g,t) + dt*sum(cost_r * renewable_r,t)
-       + sum_i [ dt*sum(epsilon_i*p_i,t + zeta_i*g_i,t) - b_i(s_i,T - sbar_i,T) ]
-    s.t. per-storage SOC dynamics (4) and SOC limits (6)-(7), one set per storage unit i;
-         power balance summed over every thermal, renewable, and storage participant.
-
-    `terminal_values[i]` is storage unit `system.storages[i]`'s own bid; every ESS has an
-    independent terminal value function, so heterogeneous willingness-to-pay is exactly
-    where different storage owners compete (ROADMAP.md research direction 1).
-
-    Uses the gurobipy package's built-in size-limited free license, which needs no setup
-    and comfortably covers problems this size; a real (e.g. academic) license would be
-    needed for the large-scale systems described in ROADMAP.md stage 2 (paper Section 4.8
-    reports well over 100 ESS on an hourly 24-interval horizon).
+def _build_model(model: gp.Model, system: System, terminal_values: Sequence[TerminalValueFunction]) -> dict:
+    """Populate `model` with the day-ahead LP (paper eq. 9) and return the variable and
+    constraint handles callers need: `solve_day_ahead` to extract a solution, and
+    `markets.pricing` to build the explicit dual for price tie-breaking. Kept separate
+    from `solve_day_ahead` so both can share one LP construction (see `price_ranges`).
     """
     if len(terminal_values) != len(system.storages):
         raise ValueError("terminal_values must have exactly one entry per system.storages unit")
@@ -79,95 +68,138 @@ def solve_day_ahead(system: System, terminal_values: Sequence[TerminalValueFunct
     n_storage = len(system.storages)
     segments = [tv.lp_segments() for tv in terminal_values]
 
-    with gp.Env(params={"OutputFlag": 0}) as env, gp.Model("day_ahead", env=env) as model:
-        thermal = {
-            (g, t): model.addVar(lb=gen.p_min, ub=_ub(gen.p_max), name=f"thermal[{gen.name},{t}]")
-            for g, gen in enumerate(system.thermal)
-            for t in range(T)
-        }
-        renewable = {
-            (r, t): model.addVar(lb=0.0, ub=gen.capacity[t], name=f"renewable[{gen.name},{t}]")
-            for r, gen in enumerate(system.renewables)
-            for t in range(T)
-        }
-        charge = {
-            (i, t): model.addVar(lb=0.0, ub=_ub(storage.p_max), name=f"charge[{storage.name},{t}]")
-            for i, storage in enumerate(system.storages)
-            for t in range(T)
-        }
-        discharge = {
-            (i, t): model.addVar(lb=0.0, ub=_ub(storage.g_max), name=f"discharge[{storage.name},{t}]")
-            for i, storage in enumerate(system.storages)
-            for t in range(T)
-        }
-        soc = {
-            (i, t): model.addVar(lb=storage.s_min, ub=storage.s_max, name=f"soc[{storage.name},{t}]")
-            for i, storage in enumerate(system.storages)
-            for t in range(T)
-        }
-        up = [
-            [model.addVar(lb=0.0, ub=_ub(width), name=f"up[{storage.name},{k}]") for k, (width, _) in enumerate(segments[i][0])]
-            for i, storage in enumerate(system.storages)
-        ]
-        down = [
-            [model.addVar(lb=0.0, ub=_ub(width), name=f"down[{storage.name},{k}]") for k, (width, _) in enumerate(segments[i][1])]
-            for i, storage in enumerate(system.storages)
-        ]
+    thermal = {
+        (g, t): model.addVar(lb=gen.p_min, ub=_ub(gen.p_max), name=f"thermal[{gen.name},{t}]")
+        for g, gen in enumerate(system.thermal)
+        for t in range(T)
+    }
+    renewable = {
+        (r, t): model.addVar(lb=0.0, ub=gen.capacity[t], name=f"renewable[{gen.name},{t}]")
+        for r, gen in enumerate(system.renewables)
+        for t in range(T)
+    }
+    charge = {
+        (i, t): model.addVar(lb=0.0, ub=_ub(storage.p_max), name=f"charge[{storage.name},{t}]")
+        for i, storage in enumerate(system.storages)
+        for t in range(T)
+    }
+    discharge = {
+        (i, t): model.addVar(lb=0.0, ub=_ub(storage.g_max), name=f"discharge[{storage.name},{t}]")
+        for i, storage in enumerate(system.storages)
+        for t in range(T)
+    }
+    soc = {
+        (i, t): model.addVar(lb=storage.s_min, ub=storage.s_max, name=f"soc[{storage.name},{t}]")
+        for i, storage in enumerate(system.storages)
+        for t in range(T)
+    }
+    up = [
+        [model.addVar(lb=0.0, ub=_ub(width), name=f"up[{storage.name},{k}]") for k, (width, _) in enumerate(segments[i][0])]
+        for i, storage in enumerate(system.storages)
+    ]
+    down = [
+        [model.addVar(lb=0.0, ub=_ub(width), name=f"down[{storage.name},{k}]") for k, (width, _) in enumerate(segments[i][1])]
+        for i, storage in enumerate(system.storages)
+    ]
 
-        def soc_before(i: int, t: int, storage):
-            return soc[i, t - 1] if t > 0 else storage.s0
+    def soc_before(i: int, t: int, storage):
+        return soc[i, t - 1] if t > 0 else storage.s0
 
-        for i, storage in enumerate(system.storages):
-            # SOC dynamics (eq. 4): s_t = dt*alpha*p_t - dt*beta*g_t + gamma*s_{t-1}
-            model.addConstrs(
-                (
-                    soc[i, t]
-                    == dt * storage.alpha * charge[i, t] - dt * storage.beta * discharge[i, t] + storage.gamma * soc_before(i, t, storage)
-                    for t in range(T)
-                ),
-                name=f"soc_dynamics[{storage.name}]",
-            )
-            # Tight SOC upper bound (eq. 6): gamma*s_{t-1} + dt*alpha*p_t <= s_max
-            model.addConstrs(
-                (storage.gamma * soc_before(i, t, storage) + dt * storage.alpha * charge[i, t] <= storage.s_max for t in range(T)),
-                name=f"soc_upper[{storage.name}]",
-            )
-            # Tight SOC lower bound (eq. 7): gamma*s_{t-1} - dt*beta*g_t >= s_min
-            model.addConstrs(
-                (storage.gamma * soc_before(i, t, storage) - dt * storage.beta * discharge[i, t] >= storage.s_min for t in range(T)),
-                name=f"soc_lower[{storage.name}]",
-            )
-            # Terminal deviation link: s_i,T = sbar_i,T + sum(up_i) - sum(down_i)
-            model.addConstr(
-                soc[i, T - 1] - gp.quicksum(up[i]) + gp.quicksum(down[i]) == storage.sbar_T(T),
-                name=f"terminal_deviation[{storage.name}]",
-            )
-
-        # Power balance: sum(thermal) + sum(renewable) + sum(discharge - charge) = demand
-        balance = model.addConstrs(
+    for i, storage in enumerate(system.storages):
+        # SOC dynamics (eq. 4): s_t = dt*alpha*p_t - dt*beta*g_t + gamma*s_{t-1}
+        model.addConstrs(
             (
-                gp.quicksum(thermal[g, t] for g in range(len(system.thermal)))
-                + gp.quicksum(renewable[r, t] for r in range(len(system.renewables)))
-                + gp.quicksum(discharge[i, t] - charge[i, t] for i in range(n_storage))
-                == system.demand[t]
+                soc[i, t]
+                == dt * storage.alpha * charge[i, t] - dt * storage.beta * discharge[i, t] + storage.gamma * soc_before(i, t, storage)
                 for t in range(T)
             ),
-            name="balance",
+            name=f"soc_dynamics[{storage.name}]",
+        )
+        # Tight SOC upper bound (eq. 6): gamma*s_{t-1} + dt*alpha*p_t <= s_max
+        model.addConstrs(
+            (storage.gamma * soc_before(i, t, storage) + dt * storage.alpha * charge[i, t] <= storage.s_max for t in range(T)),
+            name=f"soc_upper[{storage.name}]",
+        )
+        # Tight SOC lower bound (eq. 7): gamma*s_{t-1} - dt*beta*g_t >= s_min
+        model.addConstrs(
+            (storage.gamma * soc_before(i, t, storage) - dt * storage.beta * discharge[i, t] >= storage.s_min for t in range(T)),
+            name=f"soc_lower[{storage.name}]",
+        )
+        # Terminal deviation link: s_i,T = sbar_i,T + sum(up_i) - sum(down_i)
+        model.addConstr(
+            soc[i, T - 1] - gp.quicksum(up[i]) + gp.quicksum(down[i]) == storage.sbar_T(T),
+            name=f"terminal_deviation[{storage.name}]",
         )
 
-        model.setObjective(
-            dt * gp.quicksum(gen.cost * thermal[g, t] for g, gen in enumerate(system.thermal) for t in range(T))
-            + dt * gp.quicksum(gen.cost * renewable[r, t] for r, gen in enumerate(system.renewables) for t in range(T))
-            + dt
-            * gp.quicksum(
-                storage.epsilon * charge[i, t] + storage.zeta * discharge[i, t]
-                for i, storage in enumerate(system.storages)
-                for t in range(T)
-            )
-            - gp.quicksum(mv * up[i][k] for i in range(n_storage) for k, (_, mv) in enumerate(segments[i][0]))
-            + gp.quicksum(mv * down[i][k] for i in range(n_storage) for k, (_, mv) in enumerate(segments[i][1])),
-            GRB.MINIMIZE,
+    # Power balance: sum(thermal) + sum(renewable) + sum(discharge - charge) = demand
+    balance = model.addConstrs(
+        (
+            gp.quicksum(thermal[g, t] for g in range(len(system.thermal)))
+            + gp.quicksum(renewable[r, t] for r in range(len(system.renewables)))
+            + gp.quicksum(discharge[i, t] - charge[i, t] for i in range(n_storage))
+            == system.demand[t]
+            for t in range(T)
+        ),
+        name="balance",
+    )
+
+    model.setObjective(
+        dt * gp.quicksum(gen.cost * thermal[g, t] for g, gen in enumerate(system.thermal) for t in range(T))
+        + dt * gp.quicksum(gen.cost * renewable[r, t] for r, gen in enumerate(system.renewables) for t in range(T))
+        + dt
+        * gp.quicksum(
+            storage.epsilon * charge[i, t] + storage.zeta * discharge[i, t]
+            for i, storage in enumerate(system.storages)
+            for t in range(T)
         )
+        - gp.quicksum(mv * up[i][k] for i in range(n_storage) for k, (_, mv) in enumerate(segments[i][0]))
+        + gp.quicksum(mv * down[i][k] for i in range(n_storage) for k, (_, mv) in enumerate(segments[i][1])),
+        GRB.MINIMIZE,
+    )
+
+    return {
+        "thermal": thermal, "renewable": renewable, "charge": charge, "discharge": discharge,
+        "soc": soc, "balance": balance, "T": T, "dt": dt, "n_storage": n_storage,
+    }
+
+
+def solve_day_ahead(
+    system: System,
+    terminal_values: Sequence[TerminalValueFunction],
+    price_rule: str | None = None,
+) -> DispatchResult:
+    """Solve the ISO welfare-maximizing dispatch (9) with Gurobi, with the complementarity
+    condition p_t perp g_t (3) relaxed as in the paper's own examples.
+
+    `terminal_values[i]` is storage unit `system.storages[i]`'s own bid; every ESS has an
+    independent terminal value function, so heterogeneous willingness-to-pay is exactly
+    where different storage owners compete (ROADMAP.md research direction 1).
+
+    `price_rule` controls which price is reported when a balance interval is genuinely
+    dual-degenerate (multiple clearing prices are consistent with the same optimal
+    dispatch): `None` (default) leaves whatever vertex Gurobi's own simplex lands on;
+    `"min"`/`"max"` instead solve the explicit LP dual (`markets/pricing.py`) to report
+    the lowest/highest self-consistent price vector, matching the tie-break convention
+    Baldick's own worked examples use where the paper reports a range (see ROADMAP.md,
+    "Price formation & dispatch degeneracy" -- this framework's own reproduction turns
+    out to have fewer genuinely free intervals than the paper's text implies; use
+    `price_ranges` below to check any given system exactly). This only changes which
+    price is *reported* -- the dispatch itself is unaffected, since price selection
+    doesn't feed back into the primal.
+
+    Uses the gurobipy package's built-in size-limited free license, which needs no setup
+    and comfortably covers problems this size; a real (e.g. academic) license would be
+    needed for the large-scale systems described in ROADMAP.md stage 2 (paper Section 4.8
+    reports well over 100 ESS on an hourly 24-interval horizon).
+    """
+    if price_rule is not None and price_rule not in ("min", "max"):
+        raise ValueError(f"price_rule must be None, 'min', or 'max', got {price_rule!r}")
+
+    with gp.Env(params={"OutputFlag": 0}) as env, gp.Model("day_ahead", env=env) as model:
+        h = _build_model(model, system, terminal_values)
+        T, dt, n_storage = h["T"], h["dt"], h["n_storage"]
+        thermal, renewable = h["thermal"], h["renewable"]
+        charge, discharge, soc, balance = h["charge"], h["discharge"], h["soc"], h["balance"]
 
         model.optimize()
         if model.Status != GRB.OPTIMAL:
@@ -185,7 +217,10 @@ def solve_day_ahead(system: System, terminal_values: Sequence[TerminalValueFunct
 
         # The balance constraint's dual is $ per unit of its MW right-hand side; divide by
         # dt to convert to the conventional $/MWh LMP.
-        price = np.array([balance[t].Pi for t in range(T)]) / dt
+        if price_rule is None:
+            price = np.array([balance[t].Pi for t in range(T)]) / dt
+        else:
+            price = np.array(tie_break_prices(model, balance, T, env, price_rule)) / dt
         objective = model.ObjVal
 
     term_values = np.array(
@@ -215,3 +250,19 @@ def solve_day_ahead(system: System, terminal_values: Sequence[TerminalValueFunct
         terminal_value=term_values,
         ess_surplus=ess_surplus,
     )
+
+
+def price_ranges(system: System, terminal_values: Sequence[TerminalValueFunction]) -> np.ndarray:
+    """The full [min, max] range of dual-optimal $/MWh prices at every interval,
+    consistent with `system`'s own optimal dispatch cost. A diagnostic for exactly which
+    intervals are genuinely price-degenerate, rather than trusting a solver's arbitrary
+    tie-break or a paper's stated range -- see ROADMAP.md, "Price formation & dispatch
+    degeneracy". Returns an array of shape (T, 2).
+    """
+    with gp.Env(params={"OutputFlag": 0}) as env, gp.Model("day_ahead", env=env) as model:
+        h = _build_model(model, system, terminal_values)
+        model.optimize()
+        if model.Status != GRB.OPTIMAL:
+            raise RuntimeError(f"day-ahead LP failed to solve: Gurobi status {model.Status}")
+        ranges = np.array([price_range_at(model, h["balance"], t, env) for t in range(h["T"])]) / h["dt"]
+    return ranges
