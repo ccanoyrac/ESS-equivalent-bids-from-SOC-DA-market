@@ -108,24 +108,20 @@ properties of the optimum, not of any one solver's internals -- and a caution ag
 hard-coding a specific degenerate split into a test, no matter how consistently one solver
 version currently reproduces it.
 
-**Rigorous verification via the explicit LP dual** (`markets/pricing.py`): rather than
-trust a solver's arbitrary tie-break or a paper's stated range, `_build_dual` constructs
-the actual LP dual of a solved Gurobi model generically (from `model.getVars()`,
-`model.getConstrs()`, `model.getCol()` -- works on any Gurobi model, not just this
-package's), fixes it to the primal's own optimal objective value (any dual-feasible point
-matching that value is, by strong duality, itself an optimal dual solution), and
-re-solves for the min/max of any chosen dual variable. Validated two ways before trusting
-it: (1) solving the dual with a neutral objective reproduces Gurobi's own reported prices
-to 10+ decimal places, and (2) `computeIIS()` confirms $0/MWh is *infeasible* for
-interval 1 given the fixed-objective constraint, not just unreached by an optimizer --
-i.e. the uniqueness is a real property of the feasible region, not a search artifact.
-Two public entry points came out of this: `solve_day_ahead(..., price_rule="min"|"max")`
-reports the lowest/highest self-consistent price vector instead of Gurobi's arbitrary
-one (dispatch and objective are unaffected, since price selection doesn't feed back into
-the primal), and `price_ranges(system, terminal_values)` returns the true `[min, max]`
-at every interval -- the diagnostic that produced the table below and that
-`tests/test_reproduce_baldick.py` now asserts against directly, rather than against
-values transcribed from the paper.
+**Rigorous verification via the explicit LP dual**: rather than trust a solver's
+arbitrary tie-break or a paper's stated range, a one-off analysis built the actual LP
+dual of the solved Gurobi model generically (from `model.getVars()`, `model.getConstrs()`,
+`model.getCol()`), fixed it to the primal's own optimal objective value (any dual-feasible
+point matching that value is, by strong duality, itself an optimal dual solution), and
+solved for the min/max of each balance constraint's dual variable. Validated two ways
+before trusting it: (1) solving the dual with a neutral objective reproduced Gurobi's own
+reported prices to 10+ decimal places, and (2) `computeIIS()` confirmed $0/MWh is
+*infeasible* for interval 1 given the fixed-objective constraint, not just unreached by an
+optimizer -- i.e. the uniqueness is a real property of the feasible region, not a search
+artifact. This produced the table below (the code itself was a throwaway exploration, not
+kept in the package -- worth rebuilding as a permanent tool if this direction gets pursued
+further, e.g. as the basis for a controlled "does the ISO's tie-break rule affect ESS
+surplus distribution" experiment per stage 5).
 
 Sweeping every interval of all three cases:
 
