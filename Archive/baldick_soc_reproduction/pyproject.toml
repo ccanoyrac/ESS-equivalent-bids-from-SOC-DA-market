@@ -1,0 +1,25 @@
+[project]
+name = "soc-market-thesis"
+version = "0.1.0"
+description = "SOC-based electricity storage market design (Baldick 2026) -- reproduction and research framework"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.26",
+    "pandas>=2.0",
+    "gurobipy>=11.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4"]
+viz = ["matplotlib>=3.7", "plotly>=5.20"]
+notebook = ["jupyter>=1.0", "ipykernel>=6.29"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["core*", "terminal_value*", "markets*", "experiments*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

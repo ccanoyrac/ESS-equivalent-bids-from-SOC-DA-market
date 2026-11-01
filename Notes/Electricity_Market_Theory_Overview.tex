@@ -1,0 +1,190 @@
+\documentclass[10pt,conference]{IEEEtran}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage[shortlabels]{enumitem}
+\setlist[itemize]{leftmargin=1.4em, itemsep=1pt, topsep=2pt, parsep=0pt}
+
+\newcommand{\st}{\text{s.t.}}
+\newcommand{\minimize}{\operatorname*{minimize}}
+\newcommand{\maximize}{\operatorname*{maximize}}
+
+\begin{document}
+
+\title{Electricity Market Clearing Problems:\\ A Reference Formulation}
+
+\author{
+\IEEEauthorblockN{SOC-Based Storage Market Thesis --- Reference Note}
+\IEEEauthorblockA{Technical University of Denmark (DTU)}
+}
+
+\maketitle
+
+\begin{abstract}
+This note collects, in one consistent notation, the optimization problems that a modern
+ISO/RTO solves at each layer of a wholesale electricity market: the day-ahead
+security-constrained unit commitment, the real-time security-constrained economic dispatch,
+locational marginal pricing, ancillary-service co-optimization, and capacity/resource-adequacy
+accreditation. It closes by placing the state-of-charge (SOC) based storage participation
+model of Baldick (2026) within this taxonomy, using the same notation as the accompanying
+code framework (\texttt{core/}, \texttt{markets/day\_ahead.py}).
+\end{abstract}
+
+\begin{IEEEkeywords}
+electricity markets, unit commitment, economic dispatch, locational marginal pricing,
+ancillary services, resource adequacy, energy storage
+\end{IEEEkeywords}
+
+\section{Two-Settlement Structure}
+Almost every US and European wholesale market is a \emph{two-settlement system}. A
+\textbf{day-ahead (DA) market} clears a financially-binding schedule from forecasts and
+offers; a \textbf{real-time (RT) market} then physically balances the system every few
+minutes and settles any deviation from the DA schedule at the real-time price. A
+\textbf{capacity / resource-adequacy market} sits above both, on a years-ahead horizon --
+it prices the obligation to be available, but does not dispatch anything itself. Both DA
+and RT jointly clear energy and ancillary services.
+
+\section{Day-Ahead Energy Market}
+The day-ahead market solves a security-constrained unit commitment (SCUC): which units
+are on, $u_{i,t}\in\{0,1\}$, and their output $g_{i,t}$, for every interval $t\in\mathcal T$.
+
+\begin{align}
+\minimize_{u,g,d} \quad &
+\sum_{t}\sum_{i}\!\big[c_i(g_{i,t}) + SU_i u_{i,t} + SD_i v_{i,t}\big] \notag\\
+&\hspace{2em} - \sum_{t}\sum_{m} u_m(d_{m,t}) \label{eq:scuc-obj}
+\end{align}
+\begin{align*}
+\st \quad
+&\sum_i g_{i,t} + \sum_e (g_{e,t}-p_{e,t}) = \sum_m d_{m,t}, && \forall t \tag{a}\\
+&u_{i,t} P_i^{\min} \le g_{i,t} \le u_{i,t} P_i^{\max}, && \forall i,t \tag{b}\\
+&|g_{i,t}-g_{i,t-1}| \le R_i, && \forall i,t \tag{c}\\
+&\text{min up/down-time logic on } u_{i,t}, && \forall i \tag{d}\\
+&|f_{\ell,t}| \le \bar f_\ell,\quad f_{\ell,t}=\textstyle\sum_n \Phi_{\ell,n}\,\mathrm{inj}_{n,t}, && \forall \ell,t \tag{e}\\
+&\textstyle\sum_i r_{i,t} \ge R_t^{\text{req}}, && \forall t \tag{f}\\
+&\text{storage SOC dynamics/limits, if included} \tag{g}
+\end{align*}
+Constraint (a) is the nodal power balance; (b)--(c) gate output by commitment and ramp
+capability; (d) is the logical minimum-run/down-time restriction; (e) is the DC optimal
+power flow (DC-OPF) network block; (f)--(g) couple the energy problem to reserves and
+storage.
+
+\section{Real-Time Energy Market}
+The real-time market re-dispatches continuous output every $\sim\!5$ minutes against the
+\emph{actual} net load via security-constrained economic dispatch (SCED); commitment
+$u_{i,t}$ is already fixed from the DA solution (or a short-horizon RT commitment for
+fast-start units).
+\begin{equation}
+\minimize_{g} \quad \sum_i c_i(g_{i,t})
+\end{equation}
+subject to the same balance/capacity/network constraints as \eqref{eq:scuc-obj}, evaluated
+at the real-time net load, with two differences: ramp limits are measured from the
+\emph{last actual dispatch point} rather than the DA schedule, and any reserve awarded in
+the DA market must remain deliverable within its contracted response time.
+
+\section{Locational Marginal Pricing}
+The locational marginal price (LMP) is the dual of the nodal power-balance constraint
+(a); it settles both the DA and RT energy markets. Whenever the network is modeled
+explicitly it decomposes cleanly:
+\begin{equation}
+\mathrm{LMP}_{n,t} = \lambda_t - \sum_{\ell} \Phi_{\ell,n}\big(\bar\mu_{\ell,t}-\mu_{\ell,t}\big)
+\label{eq:lmp}
+\end{equation}
+where $\lambda_t$ is the reference-bus energy price (common to every node) and
+$\bar\mu_{\ell,t},\mu_{\ell,t}\ge 0$ are the congestion duals on line $\ell$'s flow limit,
+weighted by the shift factor $\Phi_{\ell,n}$ from $\ell$ to bus $n$. A loss component adds
+a third, often-linearized term when losses are modeled explicitly.
+
+\section{Ancillary Services and Reserve Co-Optimization}
+\label{sec:as}
+Ancillary services are co-optimized jointly with energy in both the DA and RT markets: a
+unit that reserves capacity for a product cannot simultaneously sell that same MW as
+energy.
+\begin{align}
+\minimize_{g,r} \quad & \sum_i c_i(g_{i,t}) + \sum_i\sum_k c_i^k(r_{i,t}^k)
+\end{align}
+with $k \in \{\text{regulation, spinning, non-spinning, ramping}\}$, subject to
+\begin{align*}
+&\textstyle\sum_i r_{i,t}^k \ge R_t^k, && \forall k,t \tag{a}\\
+&g_{i,t}+r_{i,t}^{\text{up}} \le P_i^{\max},\quad g_{i,t}-r_{i,t}^{\text{down}} \ge P_i^{\min}, && \forall i,t \tag{b}\\
+&r_{i,t}^k \le \mathrm{RampRate}_i \times \tau_k, && \forall i,k,t \tag{c}\\
+&s_{e,t-1} \ge \mathrm{dur}_k\, r_{e,t}^{\text{up}}, \label{eq:soc-reserve}\\
+&\bar s_e - s_{e,t-1} \ge \mathrm{dur}_k\, r_{e,t}^{\text{down}}, && \forall e,k,t \tag{d}
+\end{align*}
+Constraint~(d) is storage-specific: enough energy (respectively headroom) must already
+be banked in the SOC to sustain the reserve call for its required duration
+$\mathrm{dur}_k$. \textbf{Regulation} (seconds--minutes, AGC-driven, near-zero net energy
+over a cycle) is storage's best operational fit; \textbf{spinning/non-spinning reserve}
+($\sim\!10$-minute response, sustained 30 minutes to a few hours) is comfortable for most
+storage durations; \textbf{voltage support} needs almost no real energy at all.
+
+\section{Capacity / Resource Adequacy Market}
+A separate, longer-horizon mechanism: it pays resources to be \emph{available} during
+the system's riskiest hours of a future delivery year and does not dispatch anything.
+\begin{equation}
+\maximize_{\mathrm{Cap}} \quad \sum_i \Big[\mathrm{VRR}(\mathrm{Cap}_i) - \mathrm{Price}_i \cdot \mathrm{Cap}_i\Big]
+\end{equation}
+cleared against an administrative, downward-sloping demand curve (a Variable Resource
+Requirement, or VRR, curve in PJM-style designs), subject to
+\begin{align*}
+&\textstyle\sum_i \mathrm{ELCC}_i \cdot \mathrm{Cap}_i \ge (1+m)\cdot\mathrm{PeakLoad}, \tag{a}
+\end{align*}
+where $m$ is the target reserve margin, often set from a Loss-of-Load-Expectation (LOLE)
+standard of $\le 0.1$ day/year. $\mathrm{ELCC}_i$ (Effective Load Carrying Capability) is
+duration- and penetration-dependent for storage: a 4-hour battery is derated relative to
+an 8-hour one, and its \emph{marginal} ELCC falls as more storage of the same duration is
+added to the system. Crucially, this is \emph{not} a pass/fail sustained-output test but a
+probabilistic, Monte-Carlo loss-of-load measure -- not a daily discharge requirement.
+
+\section{Storage's SOC-Based Participation Model}
+\label{sec:storage}
+The design this framework reproduces (Baldick, 2026) removes the storage owner's
+in-horizon energy offer entirely: the ISO manages the SOC trajectory directly from the
+storage's own physical characteristics, priced against a single end-of-horizon bid.
+\begin{equation}
+\sum_{e,t}\big[\varepsilon_e p_{e,t} + \zeta_e g_{e,t}\big] - \sum_e b_e\big(s_{e,T}-\bar s_{e,T}\big)
+\end{equation}
+is added to the day-ahead objective~\eqref{eq:scuc-obj}, subject to
+\begin{align*}
+&s_{e,t} = \gamma_e s_{e,t-1} + \Delta t\,\alpha_e p_{e,t} - \Delta t\,\beta_e g_{e,t}, && \forall e,t \tag{a}\\
+&\gamma_e s_{e,t-1}+\Delta t\,\alpha_e p_{e,t} \le \bar s_e, && \forall e,t \tag{b}\\
+&\gamma_e s_{e,t-1}-\Delta t\,\beta_e g_{e,t} \ge \underline s_e, && \forall e,t \tag{c}\\
+&0\le p_{e,t}\le \bar p_e,\quad 0\le g_{e,t}\le \bar g_e, && \forall e,t \tag{d}
+\end{align*}
+Constraints (b)--(c) are the \emph{tightened} SOC bounds: they bind the intra-interval
+trajectory, not just its endpoints, which is strictly tighter than bounding $s_{e,t}$
+alone. The storage owner's opportunity cost is never submitted as a bid -- it is
+recovered by the ISO as the dual of the SOC dynamics (a), $\pi_{e,t}$, propagated
+backward through the Bellman-like recursion
+\begin{equation}
+\pi_{e,t} = \gamma_e\,\pi_{e,t+1} - \bar\nu_{e,t+1} + \nu_{e,t+1},
+\end{equation}
+terminated by $\pi_{e,T} = w_e(s_{e,T}-\bar s_{e,T})$ for a differentiable bid.
+
+\section{Glossary}
+\begin{table}[h]
+\centering
+\small
+\begin{tabularx}{\linewidth}{@{}lX@{}}
+\toprule
+\textbf{Term} & \textbf{Meaning} \\
+\midrule
+LMP & Locational marginal price (\S IV) \\
+SCUC / SCED & Sec.-constrained unit commitment / economic dispatch \\
+DC-OPF & DC (linearized) optimal power flow \\
+AGC & Automatic Generation Control (regulation signal) \\
+ELCC & Effective Load Carrying Capability (\S VI) \\
+VRR & Variable Resource Requirement (sloped capacity curve) \\
+LOLE & Loss-of-Load Expectation (reliability standard) \\
+ISO/RTO & Independent System Operator / Regional Transmission Org. \\
+SOC & State of charge (\S VII) \\
+Order 841 & FERC's 2018 mandate opening markets to storage \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\vfill
+\noindent\footnotesize\textit{Companion to \texttt{Code/ROADMAP.md} and
+\texttt{Literature/KKT\_MCP\_equilibrium\_SOC\_storage.pdf} -- notation matches
+\texttt{core/}, \texttt{markets/day\_ahead.py}.}
+
+\end{document}

@@ -1,0 +1,34 @@
+{
+	"nodes":[
+		{"id":"63ec15a557cb058a","type":"text","text":"ESS increase in the market","x":-192,"y":-80,"width":250,"height":60},
+		{"id":"9dd3f1477638f5cd","type":"text","text":"Inestability of the system and Welfare reduction\n","x":-192,"y":140,"width":250,"height":60},
+		{"id":"d5b2a89336e36651","type":"text","text":"More Renewable Penetration","x":-207,"y":-320,"width":280,"height":50},
+		{"id":"74232f543a065d8b","type":"text","text":"New market design might incentive the ESS owners not to bid truethfully","x":267,"y":107,"width":250,"height":127},
+		{"id":"9cf94c762cb8501a","type":"text","text":"ESS profit comes in a great percentage from arbitrage","x":267,"y":-80,"width":250,"height":60},
+		{"id":"59c5ee015167e9e0","type":"text","text":"Maybe use VCG and Asymmetric Nash\nBargaining theory to calculate the market power of the batteries? [[An efficient and incentive-compatible market design for energy storage participation]]","x":-361,"y":455,"width":339,"height":171},
+		{"id":"b5d4863ebe918f20","type":"text","text":"Bc even though doing the peak shaving for example is worth for the SW max it isnt for the ESS profit (coming for doing arbitrage at those hours) [[An efficient and incentive-compatible market design for energy storage participation]]","x":200,"y":421,"width":713,"height":120},
+		{"id":"b0c0b62fab20d4b3","type":"text","text":"ESS is co-optimizaed in DA and ancilliary services (in ERCOT and PJM) [[3.-A state-of-charge based formulation for storage]]","x":-860,"y":-119,"width":290,"height":138},
+		{"id":"a47738af3cca695a","type":"text","text":"How do they do that if the power necesity in ancilliary service is 30% SOC for more than 3 hours straight?","x":-840,"y":140,"width":250,"height":149},
+		{"id":"03e308bc71081025","type":"text","text":"Ancilliary service market with energy bids instead of capacity","x":-1037,"y":383,"width":322,"height":72},
+		{"id":"8559cd50f8c772bf","x":-893,"y":760,"width":303,"height":190,"type":"text","text":"If an agent's profit-maximization problem is non-convex, its KKT conditions are no longer sufficient for global optimality. Therefore, the standard price-based competitive-equilibrium result may fail."},
+		{"id":"764a5e42e683fc9d","x":419,"y":677,"width":276,"height":273,"type":"text","text":"If the centralized ISO problem is convex and the agents' problems are concave maximization problems, their KKT conditions are sufficient for global optimality. Under the appropriate market-clearing and pricing assumptions, the agents' MCP can then reproduce the ISO optimum."},
+		{"id":"9d96ebc07b228990","x":-283,"y":758,"width":341,"height":97,"type":"text","text":"Future expected profits w in case it is increasing, the b term (its integral) is no longer convex"},
+		{"id":"b85e3174a7be3728","x":663,"y":-270,"width":250,"height":60,"type":"text","text":"The market design "},
+		{"id":"ae03949680da7957","x":280,"y":-396,"width":300,"height":101,"type":"text","text":"the willingness to pay for the ESS generators can be increasing"},
+		{"id":"e1be5356f177b56d","x":-981,"y":-601,"width":391,"height":101,"type":"text","text":"Capability of big storage systems to break equilibrium in our new system and the possibilites of reducing tha market power"}
+	],
+	"edges":[
+		{"id":"ae02f9d33d4148e8","fromNode":"d5b2a89336e36651","fromSide":"bottom","toNode":"63ec15a557cb058a","toSide":"top","label":"oportunity to get profit"},
+		{"id":"2c9278fa46927394","fromNode":"63ec15a557cb058a","fromSide":"bottom","toNode":"9dd3f1477638f5cd","toSide":"top","label":"Forecast errors derived from profit maximization"},
+		{"id":"9a66f6bb6a98a32b","fromNode":"63ec15a557cb058a","fromSide":"right","toNode":"9cf94c762cb8501a","toSide":"left"},
+		{"id":"fc81feea5f029af3","fromNode":"9cf94c762cb8501a","fromSide":"bottom","toNode":"74232f543a065d8b","toSide":"top"},
+		{"id":"c70ab33632565c95","fromNode":"74232f543a065d8b","fromSide":"bottom","toNode":"b5d4863ebe918f20","toSide":"top","label":"why?"},
+		{"id":"1b6fb66fd9d4d1a6","fromNode":"63ec15a557cb058a","fromSide":"left","toNode":"b0c0b62fab20d4b3","toSide":"right","label":"In Baldick´s paper"},
+		{"id":"000aee1aef11fbc3","fromNode":"b0c0b62fab20d4b3","fromSide":"bottom","toNode":"a47738af3cca695a","toSide":"top","label":"how?"},
+		{"id":"591c667fd0769aab","fromNode":"74232f543a065d8b","fromSide":"bottom","toNode":"59c5ee015167e9e0","toSide":"top","label":"Resources to compensate \nthe ESS owners"},
+		{"id":"995971b7be1100da","fromNode":"a47738af3cca695a","fromSide":"right","toNode":"59c5ee015167e9e0","toSide":"left"},
+		{"id":"608de88011ceea8c","fromNode":"59c5ee015167e9e0","fromSide":"left","toNode":"a47738af3cca695a","toSide":"right","label":"check if the ESS are incentivised\n to bid truethfully"},
+		{"id":"6ed5ec4b44d45fee","fromNode":"a47738af3cca695a","fromSide":"bottom","toNode":"03e308bc71081025","toSide":"top","label":"Posibility"},
+		{"id":"d16e6e793af5c1da","fromNode":"74232f543a065d8b","fromSide":"right","toNode":"b85e3174a7be3728","toSide":"left"}
+	]
+}

@@ -1,0 +1,241 @@
+{
+  "main": {
+    "id": "bc583bd22edfa9a2",
+    "type": "split",
+    "children": [
+      {
+        "id": "74c32361eb3221ba",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "512cfb10b96947e4",
+            "type": "leaf",
+            "state": {
+              "type": "canvas",
+              "state": {
+                "file": "2.-problem statement.canvas",
+                "viewState": {
+                  "x": -307.4027542381708,
+                  "y": -124.00498233572921,
+                  "zoom": -0.5002014033811136
+                }
+              },
+              "icon": "lucide-layout-dashboard",
+              "title": "2.-problem statement"
+            }
+          },
+          {
+            "id": "9c14172b846c8643",
+            "type": "leaf",
+            "state": {
+              "type": "graph",
+              "state": {},
+              "icon": "lucide-git-fork",
+              "title": "Vista gráfica"
+            }
+          },
+          {
+            "id": "901cf8b51cab32f5",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "An efficient and incentive-compatible market design for energy storage participation.md",
+                "linksCollapsed": true,
+                "unlinkedCollapsed": false
+              },
+              "icon": "links-going-out",
+              "title": "Enlaces salientes"
+            }
+          },
+          {
+            "id": "1b412817d1953f92",
+            "type": "leaf",
+            "state": {
+              "type": "graph",
+              "state": {},
+              "icon": "lucide-git-fork",
+              "title": "Vista gráfica"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "1455c20d9afa95b0",
+    "type": "split",
+    "children": [
+      {
+        "id": "27632c3043c85a28",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "4fde966e4e74322e",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Explorador de archivos"
+            }
+          },
+          {
+            "id": "5ac8cb5b04c540c6",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "[\"cssclasses\"]",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Buscar"
+            }
+          },
+          {
+            "id": "eb9bda232eb813bc",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-bookmark",
+              "title": "Marcadores"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "7dfa1c5fc5efccd5",
+    "type": "split",
+    "children": [
+      {
+        "id": "c8d936ab30916dee",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "1ea7f098e6115ef7",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "An efficient and incentive-compatible market design for energy storage participation.md",
+                "collapseAll": true,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": true,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Enlaces entrantes"
+            }
+          },
+          {
+            "id": "c33058b6347e22f6",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Etiquetas"
+            }
+          },
+          {
+            "id": "58ffa6c539d60c82",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "Todas las propiedades"
+            }
+          },
+          {
+            "id": "ab3afbdc18811db9",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "An efficient and incentive-compatible market design for energy storage participation.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Esquema"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 200,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Abrir selector rápido": false,
+      "graph:Abrir vista gráfica": false,
+      "canvas:Crear nuevo lienzo": false,
+      "daily-notes:Abrir la nota de hoy": false,
+      "templates:Insertar plantilla": false,
+      "command-palette:Abrir paleta de comandos": false,
+      "bases:Crear nueva base": false
+    }
+  },
+  "active": "512cfb10b96947e4",
+  "lastOpenFiles": [
+    "3.-A state-of-charge based formulation for storage.md",
+    "A market mechanism for truthful bidding with energy storage.md",
+    "An efficient and incentive-compatible market design for energy storage participation.md",
+    "2.-problem statement.canvas",
+    "Strategic bidding of an ESS agent in a joint energy and stochastic generation.md",
+    "Stochastic MPC for real-time market-based optimal power dispatch.md",
+    "Pricing Under Uncertainty in Multi-Interval Real-Time Markets.md",
+    "Pricing Energy Storage in Real-time Market.md",
+    "Multi-Interval Energy-Reserve Co-Optimizationwith SoC-Dependent Bids from Battery Storage.md",
+    "Energy Storage State-of-Charge Market Model.md",
+    "Electric Storage Participation in Markets Operated by Regional Transmission Organizations and Independent System Operators.md",
+    "Battery Storage Formulation and Impact on DayAhead Security Constrained Unit Commitment.md",
+    "Pasted image 20260831010233.png",
+    "Pasted image 20260831010205.png",
+    "1.-INDEX.base",
+    "Bienvenido.md",
+    "cree un enlace.md",
+    "Sin nombre",
+    "Stochastic MPC for real-time market-based optimal power dispatch.pdf",
+    "Sin confirmar 419377.crdownload",
+    "Sin título.canvas",
+    "Sin título.base",
+    "2026-08-29.md",
+    "Sin título 1.base"
+  ]
+}

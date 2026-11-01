@@ -1,0 +1,36 @@
+\contentsline {section}{\numberline {1}Big picture}{2}{section.1}%
+\contentsline {section}{\numberline {2}Repository map and dependencies}{3}{section.2}%
+\contentsline {section}{\numberline {3}Where the model is created: the \texttt {case} dictionary}{4}{section.3}%
+\contentsline {section}{\numberline {4}The optimisation models}{5}{section.4}%
+\contentsline {subsection}{\numberline {4.1}M1 -- Baldick's SOC design $\mathcal P^{\text {SOC}}$ (the benchmark)}{6}{subsection.4.1}%
+\contentsline {subsection}{\numberline {4.2}M2 -- Current design $\mathcal P^{\text {CD}}$ and the equivalent bids (E)}{6}{subsection.4.2}%
+\contentsline {subsection}{\numberline {4.3}M3 -- The battery's self-schedule $\mathcal P^{\text {SS}}_e(\lambda )$, with a tie-breaker}{6}{subsection.4.3}%
+\contentsline {subsection}{\numberline {4.4}M4 -- The multiplier polyhedron $\Pi $ (Prop.~5) and the selection rule}{7}{subsection.4.4}%
+\contentsline {subsection}{\numberline {4.5}From multipliers to a bid curve: the quantity rule}{7}{subsection.4.5}%
+\contentsline {subsection}{\numberline {4.6}M5 -- Day-ahead clearing of the current design (\texttt {market.clear\_hour})}{8}{subsection.4.6}%
+\contentsline {subsection}{\numberline {4.7}M6 -- Real-time repair of the battery (\texttt {realtime.feasible\_schedule})}{9}{subsection.4.7}%
+\contentsline {subsection}{\numberline {4.8}M7 -- Generator redispatch (\texttt {realtime.redispatch\_hour})}{9}{subsection.4.8}%
+\contentsline {subsection}{\numberline {4.9}Welfare and metrics}{10}{subsection.4.9}%
+\contentsline {section}{\numberline {5}The forecast error}{10}{section.5}%
+\contentsline {subsection}{\numberline {5.1}Model (\texttt {forecasts.forecast\_prices})}{10}{subsection.5.1}%
+\contentsline {subsection}{\numberline {5.2}Seeds: one error shape per draw, shared by every setting}{11}{subsection.5.2}%
+\contentsline {subsection}{\numberline {5.3}Where the error is inserted}{12}{subsection.5.3}%
+\contentsline {section}{\numberline {6}Choosing the error values, and how to defend them}{12}{section.6}%
+\contentsline {subsection}{\numberline {6.1}Forecast error size $\sigma $: \{0, 2.5, 5, 10, 20, 40\}\,\% of $\bar \lambda $}{12}{subsection.6.1}%
+\contentsline {subsection}{\numberline {6.2}Autocorrelation $\rho $: \{0, 0.5, 0.9\} between consecutive intervals}{13}{subsection.6.2}%
+\contentsline {subsection}{\numberline {6.3}Bias: \{$-10$, 0, $+10$\}\,\% of $\bar \lambda $}{13}{subsection.6.3}%
+\contentsline {subsection}{\numberline {6.4}Common share $\omega $: \{0, 0.5, 1\} (stage 2, several batteries)}{13}{subsection.6.4}%
+\contentsline {subsection}{\numberline {6.5}Price floor $\underline \lambda =0$}{13}{subsection.6.5}%
+\contentsline {subsection}{\numberline {6.6}Not error parameters, but chosen alongside them}{14}{subsection.6.6}%
+\contentsline {section}{\numberline {7}Inside the multiplier polyhedron $\Pi $}{14}{section.7}%
+\contentsline {subsection}{\numberline {7.1}What $\Pi $ is, in plain words}{14}{subsection.7.1}%
+\contentsline {subsection}{\numberline {7.2}At the true prices: a square of choices, all equally good}{14}{subsection.7.2}%
+\contentsline {subsection}{\numberline {7.3}Under forecast error: the valid ranges move and open up}{15}{subsection.7.3}%
+\contentsline {section}{\numberline {8}One experiment draw, end to end}{17}{section.8}%
+\contentsline {subsection}{\numberline {8.1}What each bid family isolates}{17}{subsection.8.1}%
+\contentsline {section}{\numberline {9}Seeing each step: notebook, explorer and albums}{18}{section.9}%
+\contentsline {section}{\numberline {10}Configuration and stages (\texttt {config.py})}{18}{section.10}%
+\contentsline {section}{\numberline {11}Verification layer}{19}{section.11}%
+\contentsline {section}{\numberline {12}Numbers: benchmark and stage 0}{19}{section.12}%
+\contentsline {section}{\numberline {13}Notation crosswalk}{20}{section.13}%
+\contentsline {section}{\numberline {14}Caveats found while reading the code}{21}{section.14}%
