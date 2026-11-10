@@ -13,6 +13,9 @@ from typing import Literal, Optional
 
 import numpy as np
 
+# sigma of a zero-mean normal error with a given mean absolute error: E|sigma*z| = sigma*sqrt(2/pi)
+MAE_TO_SIGMA = float(np.sqrt(np.pi / 2.0))
+
 
 @dataclass(frozen=True)
 class ErrorModel:
@@ -33,6 +36,18 @@ class ErrorModel:
     `None` disables the clipping (pure Gaussian errors). For a market with negative prices,
     set it to that market's minimum clearing price.
 
+    `mae_pct` / `mae_abs`: the error size given as a mean absolute error instead of a std --
+    `mae_pct` as a % of `lam_bar`, `mae_abs` in $/MWh. For a normal error e = sigma*z,
+    E|e| = sigma*sqrt(2/pi), so
+
+        sigma = sqrt(pi/2) * MAE  (~1.2533 * MAE).
+
+    MAE is the size forecasting studies report, so it is the natural input when the grid is
+    anchored on real forecasts. It is the MAE of the random part sigma*z only: the bias is
+    a separate knob, and the price floor is applied afterwards (where it binds, lambda*
+    near the floor, the realised error is smaller than this MAE). Give either an MAE or a
+    sigma, not both.
+
     `sigma_w` ($/MWh): error of each owner's estimate of its own terminal value,
 
         w_hat[e] = max(price_floor, w[e] + sigma_w*z_w[e]),   z_w[e] ~ N(0,1) iid,
@@ -49,16 +64,47 @@ class ErrorModel:
     omega: float = 0.0
     price_floor: Optional[float] = 0.0
     sigma_w: float = 0.0
+    mae_pct: Optional[float] = None
+    mae_abs: Optional[float] = None
+
+    def __post_init__(self):
+        if self.mae_pct is not None and self.mae_abs is not None:
+            raise ValueError("give the MAE once: mae_pct or mae_abs, not both")
+        if self.has_mae and (self.sigma_abs is not None or self.sigma_pct != 0.0):
+            raise ValueError("give the error size once: an MAE (mae_pct/mae_abs) or a sigma (sigma_pct/sigma_abs)")
+        if (self.mae_pct or 0.0) < 0 or (self.mae_abs or 0.0) < 0:
+            raise ValueError("the MAE must be >= 0")
+
+    @property
+    def has_mae(self) -> bool:
+        return self.mae_pct is not None or self.mae_abs is not None
+
+    def mae_value(self, lam_bar: float) -> float:
+        """Mean absolute error of the random part sigma*z, $/MWh. When the size is given as a
+        sigma, this is the MAE that sigma implies, sigma*sqrt(2/pi)."""
+        if self.mae_abs is not None:
+            return self.mae_abs
+        if self.mae_pct is not None:
+            return self.mae_pct / 100.0 * lam_bar
+        return self.sigma_value(lam_bar) / MAE_TO_SIGMA
 
     def sigma_value(self, lam_bar: float) -> float:
-        """Absolute error std in $/MWh, resolving the sigma_pct/sigma_abs choice."""
+        """Absolute error std in $/MWh: sqrt(pi/2)*MAE when the size is an MAE, otherwise
+        the sigma_pct/sigma_abs choice."""
+        if self.has_mae:
+            return MAE_TO_SIGMA * self.mae_value(lam_bar)
         if self.sigma_abs is not None:
             return self.sigma_abs
         return self.sigma_pct / 100.0 * lam_bar
 
     def label(self) -> str:
-        s = f"{self.sigma_abs}$/MWh" if self.sigma_abs is not None else f"{self.sigma_pct}%"
-        return (f"sigma={s}, rho={self.rho}, bias={self.bias_pct}%, omega={self.omega}, "
+        if self.mae_abs is not None:
+            s = f"MAE={self.mae_abs}$/MWh"
+        elif self.mae_pct is not None:
+            s = f"MAE={self.mae_pct}%"
+        else:
+            s = f"sigma={self.sigma_abs}$/MWh" if self.sigma_abs is not None else f"sigma={self.sigma_pct}%"
+        return (f"{s}, rho={self.rho}, bias={self.bias_pct}%, omega={self.omega}, "
                 f"floor={self.price_floor}, sigma_w={self.sigma_w}$/MWh")
 
 
@@ -142,7 +188,10 @@ class RunSettings:
 STAGE0_SEED = 42
 STAGE0_DRAWS = 150  # matches the pilot's own N for the stochastic settings it quotes
 STAGE0_PSI_FOR_PRIV = (0.0, 10.0, 50.0)
-STAGE0_SIGMA_ABS_MWH = (0.0, 1.0, 2.0, 5.0, 10.0, 20.0)  # pilot's own units, $/MWh
+# Error size as an MAE, % of mean(lambda*) (sigma = sqrt(pi/2)*MAE, ErrorModel): 0 = perfect prices,
+# 5-16% = state-of-the-art day-ahead forecasts (Lago et al. 2021), 20-40% = naive / no skill.
+STAGE0_MAE_PCT = (0.0, 2.5, 5.0, 10.0, 20.0, 40.0)
+STAGE0_FAMILIES_FOR_STOCHASTIC: tuple[BidFamily, ...] = ("B_star_p", "B_fcst", "B_priv")
 STAGE0_PSI_FOR_STOCHASTIC = 10.0
 STAGE0_RHO_FOR_STOCHASTIC = 0.0
 STAGE0_RULE_FOR_STOCHASTIC: PiRule = "prelimit"
@@ -175,20 +224,23 @@ def stage0_deterministic_settings() -> list[RunSettings]:
 
 
 def stage0_stochastic_settings() -> list[RunSettings]:
-    """B_star_p and B_fcst at sigma=0 (deterministic check) plus the pilot's own absolute
-    sigma sweep ({0,1,2,5,10,20} $/MWh) at psi=10, rho=0 -- experiments.md section 5."""
+    """The MAE sweep STAGE0_MAE_PCT at psi=10, rho=0, for the three families that face the
+    forecast question: B_star_p (exact prices), B_fcst (forecast prices) and B_priv (no
+    forecast at all). MAE = 0 is the deterministic check. B_priv uses no forecast and
+    sigma_w = 0 here, so it has no randomness: one draw per MAE is its exact value, and it
+    is repeated over the grid only so the three families line up setting by setting."""
     settings = []
-    for family in ("B_star_p", "B_fcst"):
-        for sigma_abs in STAGE0_SIGMA_ABS_MWH:
-            draws = 1 if sigma_abs == 0.0 else STAGE0_DRAWS
+    for family in STAGE0_FAMILIES_FOR_STOCHASTIC:
+        for mae_pct in STAGE0_MAE_PCT:
+            draws = 1 if mae_pct == 0.0 or family == "B_priv" else STAGE0_DRAWS
             settings.append(
                 RunSettings(
-                    error=ErrorModel(sigma_abs=sigma_abs, rho=STAGE0_RHO_FOR_STOCHASTIC),
+                    error=ErrorModel(mae_pct=mae_pct, rho=STAGE0_RHO_FOR_STOCHASTIC),
                     bid=BidRule(family=family, rule=STAGE0_RULE_FOR_STOCHASTIC),
                     realtime=RealTime(psi=STAGE0_PSI_FOR_STOCHASTIC),
                     draws=draws,
                     base_seed=STAGE0_SEED,
-                    setting_id=f"stage0_{family}_sigma{sigma_abs:g}",
+                    setting_id=f"stage0_{family}_mae{mae_pct:g}",
                 )
             )
     return settings

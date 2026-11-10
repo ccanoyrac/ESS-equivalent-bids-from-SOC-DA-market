@@ -99,3 +99,23 @@ def test_stage1_two_batteries_b_star_gate():
         rows[fam] = runner.run_draw(case, bench, st, 0)
     assert abs(rows["B_star"]["dSW"]) < 1e-6
     assert abs(rows["B_fcst"]["dSW"] - rows["B_star_p"]["dSW"]) < 1e-9
+
+
+def test_ess_profit_settles_deviations_with_a_psi_penalty():
+    """welfare.ess_profit: B_star delivers what it sold, so it pays no penalty and earns the
+    benchmark battery's profit (to the quantity rule's delta); B_priv's undeliverable energy
+    is charged psi per MWh, and its components add up."""
+    from experiments import welfare
+    case, b = _bench()
+    S, T, dT = case["ess"][0], case["T"], case["dT"]
+    bench_profit = welfare.ess_profit(S, b.p_star[0], b.g_star[0], b.p_star[0], b.g_star[0], b.s_star[0][-1],
+                                      b.lam_star[0], 10.0, dT).profit
+    common = dict(error=ErrorModel(), realtime=RealTime(psi=10.0), draws=1)
+    star = runner.run_draw(case, b, RunSettings(bid=BidRule(family="B_star"), **common), 0)
+    assert star["ess_deviation_MWh"] < 1e-6 and star["ess_imbalance_penalty"] < 1e-6
+    assert abs(star["ess_profit"] - bench_profit) <= 0.01 * dT * float(np.sum(b.p_star[0] + b.g_star[0])) + 1e-6
+    priv = runner.run_draw(case, b, RunSettings(bid=BidRule(family="B_priv"), **common), 0)
+    assert abs(priv["ess_deviation_MWh"] - priv["undeliverable_MWh"]) < 1e-6
+    assert abs(priv["ess_imbalance_penalty"] - 10.0 * priv["ess_deviation_MWh"]) < 1e-6
+    total = priv["ess_energy_payments"] - priv["ess_imbalance_penalty"] - priv["ess_degradation"] + priv["ess_terminal_value"]
+    assert abs(priv["ess_profit"] - total) < 1e-6

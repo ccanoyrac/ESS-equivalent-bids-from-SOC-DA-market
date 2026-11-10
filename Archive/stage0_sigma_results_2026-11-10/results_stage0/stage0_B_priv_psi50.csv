@@ -1,0 +1,2 @@
+stage,setting_id,family,rule,tie_break_reward,sigma_pct,sigma_abs,rho,bias_pct,omega,psi,n_ess,draw,seed,dSW,dSW_pct,undeliverable_MWh,shed_MWh,price_dist,ess_profit,SW_real
+stage0,stage0_B_priv_psi50,B_priv,prelimit,0.001,0.0,,0.0,0.0,0.0,50.0,1,0,3444837047,52555.55555555556,15.432501566088954,1051.111111111111,0.0,17.516666666666666,-12000.0,-72004.44444444445

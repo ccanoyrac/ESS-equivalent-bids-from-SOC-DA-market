@@ -3,6 +3,7 @@
     lam_hat[e,t] = max(price_floor, lam_star[t] + bias_pct/100*lam_bar + sigma*z[e,t])
     z[e,t]       = sqrt(omega)*chi[t] + sqrt(1-omega)*eta[e,t]
     x[t]         = rho*x[t-1] + sqrt(1-rho^2)*w[t],  w ~ N(0,1) iid,  x[1] ~ N(0,1)
+    sigma        = sqrt(pi/2)*MAE    when the error size is given as an MAE (config.ErrorModel)
 
 The floor (default 0, see config.ErrorModel) censors the error from below: in an interval with
 lam_star = 0 the forecast error is max(0, sigma*z), never negative.

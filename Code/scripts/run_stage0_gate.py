@@ -45,10 +45,10 @@ def main() -> None:
         row = df[df["setting_id"] == f"stage0_B_priv_psi{psi:g}"].iloc[0]
         print(f"  psi={psi:>4.0f}: dSW_pct={row['dSW_pct']:7.2f}%  undeliverable={row['undeliverable_MWh']:8.2f} MWh")
 
-    print("\nStochastic settings (rho=0, psi=10), mean dSW_pct by family and sigma:")
-    stoch = df[df["family"].isin(["B_star_p", "B_fcst"]) & df["setting_id"].str.startswith("stage0_B")]
-    summary = metrics.summarize_by_setting(stoch, "dSW_pct", ["family", "sigma_abs"])
-    print(summary.sort_values(["family", "sigma_abs"]).to_string(index=False))
+    print("\nStochastic settings (rho=0, psi=10), mean dSW_pct by family and MAE (% of mean lambda*):")
+    stoch = df[df["setting_id"].str.contains("_mae")]
+    summary = metrics.summarize_by_setting(stoch, "dSW_pct", ["family", "mae_pct"])
+    print(summary.sort_values(["family", "mae_pct"]).to_string(index=False))
 
     print("\nStage-0 gate: PASSED (structural checks -- see Code/README.md for what this does and doesn't verify).")
 

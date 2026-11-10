@@ -104,9 +104,11 @@ def run_draw(case: dict, bench: Benchmark, settings: RunSettings, draw: int) -> 
     out = evaluate_blocks(case, ess_blocks, settings.realtime)
     da, w = out.da, out.welfare
     dsw_val = metrics.dsw(bench.SW_star, w.SW_real)
-    ess_profit = sum(
+    ess_profit_da = sum(
         welfare.ess_profit_day_ahead(case["ess"][e], da.p_da[e], da.g_da[e], da.lam_cd, dT) for e in range(n_ess)
     )
+    pr = [welfare.ess_profit(case["ess"][e], da.p_da[e], da.g_da[e], out.p_rt[e], out.g_rt[e], out.s_rt[e][-1],
+                             da.lam_cd, settings.realtime.psi, dT) for e in range(n_ess)]
 
     w_cols = {f"w_hat_{e}": float(w_hat[e]) for e in range(n_ess)} if settings.error.sigma_w > 0 else {}
     return dict(
@@ -117,6 +119,9 @@ def run_draw(case: dict, bench: Benchmark, settings: RunSettings, draw: int) -> 
         tie_break_reward=settings.bid.tie_break_reward,
         sigma_pct=settings.error.sigma_pct,
         sigma_abs=settings.error.sigma_abs,
+        mae_pct=settings.error.mae_pct,
+        mae_abs=settings.error.mae_abs,
+        sigma=settings.error.sigma_value(float(lam_star_e.mean())),
         rho=settings.error.rho,
         bias_pct=settings.error.bias_pct,
         omega=settings.error.omega,
@@ -131,7 +136,13 @@ def run_draw(case: dict, bench: Benchmark, settings: RunSettings, draw: int) -> 
         undeliverable_MWh=out.undeliverable_mwh,
         shed_MWh=dT * float(out.shed_rt.sum()),
         price_dist=metrics.price_distortion(da.lam_cd, lam_star_e),
-        ess_profit=ess_profit,
+        ess_profit=sum(r.profit for r in pr),  # all batteries, welfare.ess_profit
+        ess_energy_payments=sum(r.energy_payments for r in pr),
+        ess_imbalance_penalty=sum(r.imbalance_penalty for r in pr),
+        ess_degradation=sum(r.degradation for r in pr),
+        ess_terminal_value=sum(r.terminal_value for r in pr),
+        ess_deviation_MWh=sum(r.deviation_mwh for r in pr),
+        ess_profit_da=ess_profit_da,  # day-ahead settlement only, ignores real time
         SW_real=w.SW_real,
     )
 

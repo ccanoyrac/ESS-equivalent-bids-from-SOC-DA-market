@@ -58,6 +58,56 @@ def realised_welfare(
     )
 
 
+@dataclass
+class ProfitResult:
+    profit: float  # $, = energy_payments - imbalance_penalty - degradation + terminal_value
+    energy_payments: float  # $, sum_t lam_cd[t]*(g_rt[t] - p_rt[t])*dT
+    imbalance_penalty: float  # $, psi * deviation_mwh
+    degradation: float  # $, (eps*p_rt + zeta*g_rt)*dT
+    terminal_value: float  # $, w * s_T
+    deviation_mwh: float  # MWh, sum_t |(g_rt - p_rt) - (g_da - p_da)|*dT
+
+
+def ess_profit(
+    S: dict,
+    p_da: np.ndarray, g_da: np.ndarray,  # (T,) MW, sold/bought day-ahead
+    p_rt: np.ndarray, g_rt: np.ndarray,  # (T,) MW, what the battery actually did (after repair)
+    s_T: float,  # MWh, terminal SOC after repair
+    lam_cd: np.ndarray,  # (T,) $/MWh, day-ahead clearing price
+    psi: float,  # $/MWh, real-time redispatch premium
+    dT: float,
+) -> ProfitResult:
+    """The battery owner's profit for the day, at its TRUE parameters:
+
+        profit = dT*sum_t lam_cd[t]*(g_da - p_da)                      day-ahead settlement
+               + dT*sum_t lam_cd[t]*((g_rt - g_da) - (p_rt - p_da))    deviations at the day-ahead price
+               - psi * dT*sum_t |(g_rt - p_rt) - (g_da - p_da)|        imbalance penalty
+               - dT*(eps*sum p_rt + zeta*sum g_rt)                     degradation on what it did
+               + w*s_T                                                  energy kept, at the true w
+
+    The first two lines add up to dT*sum lam_cd*(g_rt - p_rt). The penalty charges the
+    battery the redispatch premium psi that welfare already counts for every MWh it deviates
+    from its day-ahead position, so a battery that sells what it cannot deliver pays for it
+    (choice confirmed with the user, 2026-11-11). The terminal value makes the profit
+    comparable with welfare, which values s_T at w too."""
+    net_rt = g_rt - p_rt
+    net_da = g_da - p_da
+    energy_payments = dT * float(np.sum(lam_cd * net_rt))
+    deviation_mwh = dT * float(np.sum(np.abs(net_rt - net_da)))
+    imbalance_penalty = psi * deviation_mwh
+    degradation = dT * float(S["eps"] * p_rt.sum() + S["zet"] * g_rt.sum())
+    terminal_value = float(S["w"] * s_T)
+    assert deviation_mwh >= 0 and degradation >= 0
+    return ProfitResult(
+        profit=energy_payments - imbalance_penalty - degradation + terminal_value,
+        energy_payments=energy_payments,
+        imbalance_penalty=imbalance_penalty,
+        degradation=degradation,
+        terminal_value=terminal_value,
+        deviation_mwh=deviation_mwh,
+    )
+
+
 def ess_profit_day_ahead(S: dict, p_da: np.ndarray, g_da: np.ndarray, lam_cd: np.ndarray, dT: float) -> float:
     """Day-ahead settlement profit: revenue from discharging minus cost of charging,
     both at the clearing price `lam_cd`, minus degradation -- the real-time adjustment

@@ -69,6 +69,30 @@ def test_sigma_abs_overrides_sigma_pct():
     assert err2.sigma_value(lam_bar=100.0) == pytest.approx(10.0)
 
 
+def test_mae_input_gives_sigma_and_the_sampled_mae():
+    """sigma = sqrt(pi/2)*MAE, and the unfloored errors drawn with it have that MAE."""
+    lam_bar = 32.0
+    err = ErrorModel(mae_pct=5.0, price_floor=None)
+    assert err.mae_value(lam_bar) == pytest.approx(1.6)
+    assert err.sigma_value(lam_bar) == pytest.approx(np.sqrt(np.pi / 2) * 1.6)
+    assert ErrorModel(mae_abs=1.6).sigma_value(lam_bar) == pytest.approx(err.sigma_value(lam_bar))
+    lam_star = np.full(50, lam_bar)
+    e = np.concatenate([forecast_prices(lam_star, err, 1, 50, np.random.default_rng(k))[0] - lam_star
+                        for k in range(400)])
+    assert np.abs(e).mean() == pytest.approx(1.6, rel=0.02)
+    assert ErrorModel(sigma_abs=2.0).mae_value(lam_bar) == pytest.approx(2.0 * np.sqrt(2 / np.pi))
+    assert ErrorModel(mae_pct=0.0).sigma_value(lam_bar) == 0.0
+
+
+def test_mae_and_sigma_are_exclusive():
+    with pytest.raises(ValueError):
+        ErrorModel(mae_pct=5.0, sigma_abs=2.0)
+    with pytest.raises(ValueError):
+        ErrorModel(mae_pct=5.0, mae_abs=1.0)
+    with pytest.raises(ValueError):
+        ErrorModel(mae_abs=-1.0)
+
+
 def test_seed_is_stable_and_common_across_settings():
     """RunSettings.seed depends on (base_seed, draw) only: the same in every session (no
     hash() randomisation; the literal values below would fail otherwise) and the same for
